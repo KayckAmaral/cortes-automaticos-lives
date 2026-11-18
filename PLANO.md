@@ -15,7 +15,7 @@
 | 3b | Chat Kick (Chrome invisível via Playwright) | ✅ funcionando no kick.com/dona (ver 5.0: a Kick abandonou o Pusher) |
 | 3c | Chat YouTube (chat-downloader) | 🟨 código pronto, não testado |
 | 4 | Cortador (junta segmentos do pico) | ✅ |
-| 5 | Calibração da webcam por streamer | 🟨 dona calibrado (por print); falta coringa/gabepeixe/yuri22 quando estiverem ao vivo |
+| 5 | Calibração da webcam por streamer | ✅ **automática** desde 18/11 (`app/webcam.py`): detecta em cada corte e acompanha mudanças de posição; calibração manual continua disponível |
 | 6 | Editor vertical + legenda (Whisper) | ✅ corte manual em **32 s** (juntar 6,6 s + whisper 11,7 s + render QSV 8,1 s) |
 | 7 | Fila de processamento + aviso no Discord | 🟨 fila ✅; Discord sem webhook ainda |
 | 7b | Painel ao vivo em `http://localhost:8000` | ✅ no ar (gráfico, fila, cortes com player, botão "Cortar agora") |
@@ -36,6 +36,8 @@
 > **18/11 ~09:30:** (1) Galeria: o feed era refeito com `innerHTML = ""` a cada mudança na lista, o que pausava o vídeo e perdia a rolagem. Agora atualiza **no lugar** (só insere/remove cards), compensa a rolagem pelo card visível e, se um vídeo estiver tocando, cortes novos só entram pelo botão "▲ N cortes novos". (2) **Vigia de disco** (`app/disco.py`, `geral.disco_minimo_gb: 8`): a cada 30 s mede o espaço livre; abaixo do limite, **pausa todos os canais** (sem mudar `ativo` no canais.yaml) e o painel e a galeria mostram uma faixa vermelha + título "⛔ DISCO CHEIO". Ao liberar espaço, a faixa fica verde com o botão **Retomar monitoramento** (`POST /api/disco/retomar`). Iniciar canal com o disco cheio dá erro. Disco livre também aparece no topo do painel.
 >
 > **18/11 ~12:15: Capa para o TikTok** (`app/capa.py`, seção `capa:` do config). Todo vídeo marcado ⭐ Postar ganha na hora, na pasta `postar/`: `<canal>_<base>.jpg` (quadro mais nítido antes do pico, desfocado atrás do texto + frase em Impact + selo com a reação do chat + "CANAL • GTA 6") e `<canal>_<base>.mp4`, o corte com a capa nos **3 primeiros quadros** (0,1 s; recodificado a 8 Mbps, ~5 s por vídeo com AMF). No TikTok: Capa → arrastar até o início. O texto sai de uma heurística local, gratuita e offline (frase com !/? perto do pico, sem enchimentos tipo "mano"), e pode ser trocado no card (↻ Refazer, `POST /api/capa`). Uma thread confere a lista a cada 10 s: refaz a capa se o corte for ajustado ou revertido, e apaga quando ele sai da lista ou é apagado. Texto melhor que a heurística: dá para usar IA (ex.: API gratuita do Gemini), mas depende de o usuário criar uma chave.
+
+> **18/11 ~14:25: Detecção automática da webcam** (`app/webcam.py`, seção `webcam:` do config). Motivo: o alanzoka mudou a câmera de lugar no meio da live e vários cortes saíram com o crop errado. Em **cada corte**, 8 frames do próprio trecho passam por: (1) detector de rosto YuNet (`modelos/rosto/`, OpenCV): o rosto que fica parado no mesmo lugar na maioria dos frames é o do streamer (rostos do jogo mudam de lugar); (2) mapa de **linhas paradas** (a moldura da webcam não se mexe, a gameplay sim) + contraste de movimento (quarto parado dentro, gameplay mudando fora); (3) testa os retângulos formados por essas linhas/borda da tela em volta do rosto. Se a posição detectada diferir da calibração (IoU < 0,6) com confiança ≥ 0,62 (≥ 0,72 se o canal estava "só gameplay"), o corte usa a nova posição e ela vira a calibração do canal. Custo ~2,7 s por corte. Ajustes/refazer de cortes antigos também detectam (no trecho deles), sem mexer na calibração atual. Painel: botão **🎯 Detectar automaticamente** na calibração (últimos ~3 min do buffer) e caixa "detectar sozinho em cada corte" por canal ("Streamer sem webcam" desliga). Testes: alanzoka/davyjones/gabepeixe ao vivo, IoU 0,96–1,00 com a calibração manual; webcam espelhada para o outro lado: 0,98–0,99; tela sem webcam: nada detectado (correto); fim a fim no alanzoka com calibração errada de propósito: corte saiu certo e `canais.yaml` foi corrigido.
 
 Legenda: ⬜ pendente · 🟨 em andamento · ✅ pronto · ❌ bloqueado
 
@@ -497,7 +499,7 @@ canais:
 | Q2 | **Juntar picos colados** num corte só (dois picos a 40 s de distância viram 1 corte maior, em vez de 1 corte + 1 descartado pela pausa) | Hoje a pausa de 60 s descarta o 2º pico. |
 | Q3 | **Títulos melhores**: usar a frase mais repetida do chat + o trecho mais forte da fala, em vez de palavras soltas ("Laion Fazer Joga Amo") | Economiza tempo na hora de postar. |
 | Q4 | **Aprender com as suas escolhas**: a proporção de vídeos que você marca "Postar" ou apaga, por streamer, vira uma sugestão de sensibilidade ("Dona: você apagou 80% → aumentar o limite?") | O sistema fica cada vez mais certeiro sem você mexer em números. |
-| Q5 | **Webcam que acompanha o rosto** (detecção automática), para streamers que mudam a câmera de lugar no meio da live | Hoje a posição é fixa. Se o streamer trocar de cena, o rosto sai do corte até você recalibrar. |
+| Q5 | ✅ **Webcam que acompanha o rosto** (detecção automática) — feito em 18/11, ver nota "Detecção automática da webcam" na seção 0 | |
 | Q6 | **Gancho nos 2 primeiros segundos**: o título em letra grande no começo do vídeo | Melhora a retenção em Reels/TikTok/Shorts. |
 
 ### 🟢 Prioridade 3: fluxo de postagem (conforto)

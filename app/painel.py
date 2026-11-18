@@ -176,6 +176,14 @@ def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True, capas=N
                 snap["sistema"] = _uso_sistema()
                 snap["disco"] = ger.info_disco()
                 self._json(snap)
+            elif caminho.startswith("/api/webcam/"):
+                nome = caminho.rsplit("/", 1)[-1]
+                if nome not in ger.por_nome:
+                    return self._json({"erro": "canal desconhecido"}, 404)
+                try:
+                    return self._json({"ok": True, **ger.detectar_webcam(nome)})
+                except Exception as e:  # noqa: BLE001
+                    return self._json({"erro": str(e)}, 400)
             elif caminho.startswith("/api/frame/"):
                 nome = caminho.rsplit("/", 1)[-1]
                 try:

@@ -7,3 +7,4 @@ websocket-client
 playwright        # chat da Kick (Chrome invisível)
 sentencepiece     # tradução offline das falas do jogo (modelo em modelos/traducao_en_pb)
 psutil            # CPU/RAM no painel e limpeza de processos órfãos
+pillow            # capa do TikTok (app/capa.py)

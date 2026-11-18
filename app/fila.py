@@ -18,7 +18,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from . import notificador
+from . import notificador, webcam
 from .cortador import juntar_trecho
 from .editor import renderizar
 from .legenda_ass import gerar_ass, texto_credito
@@ -80,6 +80,8 @@ class Fila(threading.Thread):
         self.parar = threading.Event()
         self._seq = 0
         self.lock_arquivos = threading.Lock()   # json/mp4 dos cortes (fila x sobra x painel)
+        # chamado quando a webcam de um canal mudou de lugar (o gerenciador salva e mostra no painel)
+        self.ao_mudar_webcam = None
 
     @property
     def pasta_cortes(self) -> Path:
@@ -206,9 +208,47 @@ class Fila(threading.Thread):
             hist = list(ch["historico"]) if ch else []
         return [[round(t, 1), round(p, 1), round(l, 1)] for t, p, l in hist if a <= t <= b]
 
+    # ------------------------------------------------------------------ webcam automática
+    def _ajustar_webcam(self, item, fonte: Path, inicio: float, dur: float, canal: dict, salvar: bool) -> dict:
+        """Procura a webcam nos frames do PRÓPRIO trecho do corte. Se ela estiver em outro lugar (o streamer
+        mudou a câmera de posição) ou o canal não tiver calibração, usa a posição detectada neste corte.
+        Com salvar=True (corte novo), a nova posição também vira a calibração do canal."""
+        c_cam = self.cfg.get("webcam") or {}
+        if not c_cam.get("auto", True) or canal.get("webcam_auto") is False:
+            return canal
+        t = time.time()
+        self._status(item, "achando webcam")
+        try:
+            r = webcam.detectar(webcam.frames_de_video(fonte, inicio, dur, int(c_cam.get("frames", 8))))
+        except Exception as e:  # noqa: BLE001  (nunca impede o corte de sair)
+            log.warning("detecção da webcam falhou (%s): %s", canal["nome"], e)
+            return canal
+        finally:
+            self._etapa(item, "webcam", t)
+        atual = canal.get("camera") if canal.get("layout") == "camera_gameplay" else None
+        minimo = float(c_cam.get("confianca_minima", 0.62))
+        if not atual:
+            minimo = max(minimo, float(c_cam.get("confianca_sem_calibracao", 0.72)))
+        if not r or r["confianca"] < minimo:
+            if r:
+                log.info("webcam de %s: detecção incerta (%.2f), mantendo a configuração", canal["nome"], r["confianca"])
+            return canal
+        novo = r["camera"]
+        if atual and webcam.iou(atual, novo) >= 0.6:
+            return canal   # mesma posição: mantém a calibração atual
+        log.info("📷 webcam de %s %s: %s (confiança %.2f)", canal["nome"],
+                 "MUDOU de lugar" if atual else "detectada", novo, r["confianca"])
+        item["webcam_auto"] = novo
+        if salvar and self.ao_mudar_webcam:
+            try:
+                self.ao_mudar_webcam(canal["nome"], novo)
+            except Exception as e:  # noqa: BLE001
+                log.warning("não consegui salvar a nova webcam de %s: %s", canal["nome"], e)
+        return {**canal, "layout": "camera_gameplay", "camera": novo}
+
     # ------------------------------------------------------------------ legenda + render (comum)
     def _legendar_e_renderizar(self, item, fonte: Path, inicio: float, dur: float, canal: dict,
-                               trabalho: Path, destino: Path) -> tuple[list, dict]:
+                               trabalho: Path, destino: Path, salvar_webcam: bool = False) -> tuple[list, dict]:
         c_leg = config_canal(self.cfg, canal, "legenda")
         c_saida = config_canal(self.cfg, canal, "saida")
         palavras, traducoes = [], {}
@@ -223,6 +263,8 @@ class Fila(threading.Thread):
             if c_leg.get("traduzir_jogo", True) and c_leg.get("falas_jogo", "silencio") == "silencio":
                 traducoes = traduzir_falas_jogo(palavras)
             self._etapa(item, "whisper", t)
+        canal = self._ajustar_webcam(item, fonte, inicio, dur, canal, salvar_webcam)
+        item["canal_render"] = canal
         credito = texto_credito(canal, self.cfg)
         tem_ass = bool(palavras or credito)
         if tem_ass:
@@ -271,7 +313,9 @@ class Fila(threading.Thread):
                                "A gravação travou ou a live caiu?")
 
         video = pasta_saida / f"{base_nome}.mp4"
-        palavras, traducoes = self._legendar_e_renderizar(item, bruto, offset, dur, canal, trabalho, video)
+        palavras, traducoes = self._legendar_e_renderizar(item, bruto, offset, dur, canal, trabalho, video,
+                                                          salvar_webcam=True)
+        canal = item.get("canal_render", canal)   # com a webcam que foi usada de fato
 
         texto = marcar_transcricao(palavras)
         margem = float(self.cfg["geral"].get("sobra_edicao_seg", 60))
@@ -280,6 +324,7 @@ class Fila(threading.Thread):
                 "transcricao": texto, "falas_jogo": list(traducoes.values()), "etapas": item["etapas"],
                 "pronto_em_seg": total, "sobra_pronta_em": fim + margem + 15,
                 "mudo_inicio": item.get("mudo_inicio", 0.0),
+                "webcam_auto": item.get("webcam_auto"),
                 # gráfico do chat em volta do corte (completado depois, quando a sobra for guardada)
                 "grafico": self._grafico(canal["nome"], ini - 90, fim + 60),
                 "canal_cfg": {k: canal.get(k) for k in ("nome", "plataforma", "url", "layout", "camera",
@@ -373,6 +418,9 @@ class Fila(threading.Thread):
                 "transcricao": marcar_transcricao(palavras), "falas_jogo": list(traducoes.values()),
                 "editado": True, "edicoes": int(meta.get("edicoes", 0)) + 1,
                 "mudo_inicio": item.get("mudo_inicio", 0.0),
+                "canal_cfg": {**(meta.get("canal_cfg") or {}),
+                              **{k: item.get("canal_render", canal).get(k) for k in ("layout", "camera")}},
+                "webcam_auto": item.get("webcam_auto"),
             })
             salvar_json(js, meta)
         shutil.rmtree(trabalho, ignore_errors=True)

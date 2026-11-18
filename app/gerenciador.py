@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .audio import MonitorAudio
 from .chat import criar_leitor
+from . import webcam
 from .detector import Detector
 from .gravador import Gravador, listar_segmentos
 from .legenda_ass import texto_credito
@@ -68,6 +69,7 @@ class Gerenciador:
         for c in canais:
             self.por_nome[c["nome"]] = c
             self._publicar(c)
+        fila.ao_mudar_webcam = self.webcam_mudou
 
     # ------------------------------------------------------------------ estado
     def _publicar(self, c: dict):
@@ -93,6 +95,7 @@ class Gerenciador:
             "gameplay_offset_x": c.get("gameplay_offset_x", 0.5),
             "layout": c.get("layout", "so_gameplay"),
             "camera": c.get("camera"),
+            "webcam_auto": c.get("webcam_auto") is not False,
             # só para a prévia do painel
             "zoom_so_gameplay": config_canal(self.cfg, c, "saida").get("zoom_so_gameplay", 1.35),
             "legenda_y": config_canal(self.cfg, c, "legenda").get("posicao_y", 0.36),
@@ -242,6 +245,8 @@ class Gerenciador:
                 c["credito_ativo"] = dados["credito_ativo"]
             if isinstance(dados.get("credito_texto"), str):
                 c["credito_texto"] = dados["credito_texto"].strip()[:60]
+            if isinstance(dados.get("webcam_auto"), bool):
+                c["webcam_auto"] = dados["webcam_auto"]
             if isinstance(dados.get("traduzir_jogo"), bool):
                 c.setdefault("legenda", {})["traduzir_jogo"] = dados["traduzir_jogo"]
             if dados.get("layout") in ("so_gameplay", "camera_gameplay"):
@@ -265,6 +270,33 @@ class Gerenciador:
             self._publicar(c)
             log.info("ajustes de %s atualizados: %s", nome, self._config_visivel(c))
             return self._config_visivel(c)
+
+    def webcam_mudou(self, nome: str, cam: dict):
+        """A fila detectou a webcam em outro lugar num corte novo: vira a calibração do canal."""
+        with self.lock:
+            c = self.por_nome.get(nome)
+            if not c:
+                return
+            c["camera"] = {k: round(float(cam[k]), 4) for k in ("x", "y", "w", "h")}
+            c["layout"] = "camera_gameplay"
+            self._salvar()
+            self._publicar(c)
+        log.info("webcam de %s atualizada automaticamente: %s", nome, c["camera"])
+
+    def detectar_webcam(self, nome: str) -> dict:
+        """Botão do painel: procura a webcam nos últimos ~3 min gravados (não salva; o usuário confere)."""
+        pasta = RAIZ / self.cfg["geral"]["pasta_buffer"] / nome
+        segs = [p for _, p in (listar_segmentos(pasta) if pasta.exists() else [])][:-1]   # o último ainda grava
+        if len(segs) < 3:
+            raise RuntimeError("ainda não há gravação suficiente desse canal (ele precisa estar ao vivo e rodando "
+                               "há pelo menos 30 s)")
+        dur_seg = float(self.cfg["geral"].get("segmento_seg", 10))
+        segs = segs[-max(3, int(180 / dur_seg)):]
+        r = webcam.detectar(webcam.frames_de_segmentos(segs, n=10))
+        if not r:
+            raise RuntimeError("não encontrei a webcam (rosto do streamer não apareceu ou não há moldura). "
+                               "Tente de novo daqui a pouco ou marque à mão.")
+        return r
 
     def frame_png(self, nome: str) -> bytes:
         """Print da live (do buffer gravado) para calibrar a webcam."""

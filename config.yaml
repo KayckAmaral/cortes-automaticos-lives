@@ -70,6 +70,15 @@ saida:
   zoom_so_gameplay: 1.35        # zoom da gameplay no layout so_gameplay
   credito: true                 # crédito do streamer no vídeo (ex.: "kick.com/coringa"); texto por canal no painel
 
+webcam:
+  # Detecção automática da webcam: em cada corte procura o rosto do streamer e a moldura da câmera nos
+  # frames do próprio trecho. Se a webcam mudou de lugar (ou o canal não tem calibração), o corte usa a
+  # posição detectada e ela vira a nova calibração do canal. Pode desligar por canal no painel.
+  auto: true
+  frames: 8                     # frames analisados por corte (~1 s de CPU)
+  confianca_minima: 0.62        # abaixo disso mantém a calibração atual
+  confianca_sem_calibracao: 0.72  # exigência maior para LIGAR a webcam num canal que estava "só gameplay"
+
 capa:
   # Capa para o TikTok dos vídeos marcados ⭐ Postar: gerada sozinha na pasta postar/ (imagem .jpg e o vídeo
   # com a capa nos primeiros quadros). No TikTok: Capa → arraste até o início do vídeo.

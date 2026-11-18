@@ -273,14 +273,17 @@ function montarAjustes(box, c) {
         <select data-k="layout">
           <option value="camera_gameplay" ${cfg.layout === "camera_gameplay" ? "selected" : ""}>Webcam em cima + gameplay</option>
           <option value="so_gameplay" ${cfg.layout === "so_gameplay" ? "selected" : ""}>Só gameplay</option>
-        </select><small>webcam exige calibrar abaixo</small></div>
+        </select><small>webcam exige calibrar (ou a detecção automática achar)</small></div>
       <div class="campo"><label>Posição da gameplay</label>
         <input type="range" min="0" max="1" step="0.05" data-k="gameplay_offset_x" value="${cfg.gameplay_offset_x}">
         <div class="escala"><span>◀ esquerda</span><span>centro</span><span>direita ▶</span></div>
         <small data-v="gx"></small></div>
       <div class="campo"><label>Webcam</label>
         <div data-v="cam" style="font-size:12px;color:var(--sub)">${cfg.camera ? "calibrada ✓" : "não calibrada"}</div>
-        <button type="button" class="sec" data-acao="calibrar" style="margin-top:4px">📷 Calibrar webcam</button></div>
+        <button type="button" class="sec" data-acao="calibrar" style="margin-top:4px">📷 Calibrar webcam</button>
+        <label style="font-weight:400;display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px">
+          <input type="checkbox" data-k="webcam_auto" ${cfg.webcam_auto ? "checked" : ""} style="width:auto"> detectar sozinho em cada corte</label>
+        <small>acha a webcam no próprio corte: se o streamer mudar a câmera de lugar, o corte acompanha</small></div>
     </div>
     <div data-v="calib-area"></div>
     <h3 style="display:flex;align-items:center">Prévia do corte
@@ -357,6 +360,7 @@ function montarAjustes(box, c) {
     dados.traduzir_jogo = box.querySelector('input[data-k="traduzir_jogo"]').checked;
     dados.credito_ativo = box.querySelector('input[data-k="credito_ativo"]').checked;
     dados.credito_texto = box.querySelector('input[data-k="credito_texto"]').value;
+    dados.webcam_auto = box.querySelector('input[data-k="webcam_auto"]').checked;
     const msg = box.querySelector('[data-v="msg"]');
     try {
       const j = await api("/api/ajustes/" + encodeURIComponent(c.nome), dados);
@@ -486,6 +490,7 @@ function calibrar(box, nome) {
       <button type="button" class="sec" data-a="fechar" style="margin-left:auto" title="fechar">✕ Fechar</button></h3>
     <div class="calib"><img alt="print da live"><div class="ret" style="display:none"></div></div>
     <div class="rodape-aj">
+      <button type="button" data-a="auto">🎯 Detectar automaticamente</button>
       <button type="button" class="sec" data-a="novo">🔄 Outro print</button>
       <button type="button" class="sec" data-a="sem">Streamer sem webcam</button>
       <button type="button" class="perigo" data-a="fechar">✕ Fechar calibração</button>
@@ -521,9 +526,25 @@ function calibrar(box, nome) {
       cmsg.textContent = "ok! agora clique em 💾 Aplicar ajustes";
     } };
   area.querySelector('[data-a="novo"]').onclick = carregar;
+  area.querySelector('[data-a="auto"]').onclick = async ev => {
+    const b = ev.currentTarget; b.disabled = true;
+    cmsg.textContent = "procurando a webcam nos últimos minutos da live… (alguns segundos)";
+    try {
+      const r = await fetch("/api/webcam/" + encodeURIComponent(nome));
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.erro);
+      box._camera = j.camera; desenhar(j.camera); if (box._previa) box._previa();
+      box.querySelector('select[data-k="layout"]').value = "camera_gameplay";
+      box.querySelector('[data-v="cam"]').textContent = "detectada: clique em Aplicar";
+      cmsg.innerHTML = `<span class="msg-ok">✓ webcam encontrada (confiança ${Math.round(j.confianca * 100)}%)</span>. ` +
+        "Confira o retângulo amarelo e clique em 💾 Aplicar ajustes (ou arraste para corrigir).";
+    } catch (e) { cmsg.innerHTML = '<span class="msg-erro">' + esc(e.message) + "</span>"; }
+    b.disabled = false;
+  };
   area.querySelector('[data-a="sem"]').onclick = () => {
     box._camera = null; desenhar(null);
     box.querySelector('select[data-k="layout"]').value = "so_gameplay";
+    box.querySelector('input[data-k="webcam_auto"]').checked = false;   // senão a detecção religaria a webcam
     if (box._previa) box._previa();
     cmsg.textContent = "sem webcam: clique em 💾 Aplicar ajustes";
   };
