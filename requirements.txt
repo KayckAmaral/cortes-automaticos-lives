@@ -1,0 +1,9 @@
+faster-whisper==1.2.1
+numpy
+PyYAML
+requests
+opencv-python
+websocket-client
+playwright        # chat da Kick (Chrome invisível)
+sentencepiece     # tradução offline das falas do jogo (modelo em modelos/traducao_en_pb)
+psutil            # CPU/RAM no painel e limpeza de processos órfãos

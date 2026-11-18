@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de Cortes</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<style>
+  :root {
+    --bg: #0e1014; --card: #171a21; --card2: #1e222b; --borda: #2a2f3a;
+    --txt: #e8eaf0; --sub: #8b93a5; --verde: #3ecf8e; --vermelho: #ff5c6c;
+    --amarelo: #ffd166; --azul: #5aa9ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--txt); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; flex-wrap: wrap;
+           border-bottom: 1px solid var(--borda); position: sticky; top: 0; background: var(--bg); z-index: 5; }
+  header h1 { font-size: 18px; margin: 0; }
+  nav a { color: var(--sub); text-decoration: none; margin-right: 14px; font-weight: 600; }
+  nav a.atual { color: var(--txt); border-bottom: 2px solid var(--azul); padding-bottom: 2px; }
+  nav a:hover { color: var(--txt); }
+  .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 2px; border-radius: 99px;
+           background: var(--amarelo); color: #1a1405; font-size: 11px; font-weight: 800; line-height: 17px;
+           text-align: center; vertical-align: top; }
+  .badge[hidden] { display: none; }
+  .pulso { width: 10px; height: 10px; border-radius: 50%; background: var(--verde); animation: p 1.5s infinite; }
+  .pulso.off { background: var(--vermelho); animation: none; }
+  @keyframes p { 50% { opacity: .3; } }
+  .add { display: flex; gap: 8px; flex: 1; min-width: 300px; max-width: 640px; margin-left: 20px; }
+  .add input { flex: 1; }
+  header .info { color: var(--sub); margin-left: auto; font-size: 13px; }
+  .uso { font-size: 12px; color: var(--sub); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .uso b.ok { color: var(--verde); } .uso b.medio { color: var(--amarelo); } .uso b.alto { color: var(--vermelho); }
+  .fundo-modal { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none; align-items: center;
+                 justify-content: center; z-index: 20; padding: 16px; }
+  .fundo-modal.aberto { display: flex; }
+  .modal-cel { background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 20px; max-width: 420px; width: 100%; }
+  .modal-cel p { color: var(--sub); font-size: 13px; }
+  #qr { background: #fff; padding: 12px; border-radius: 8px; width: fit-content; margin: 10px auto; }
+  .link-cel { font-size: 12px; word-break: break-all; background: var(--card2); padding: 8px; border-radius: 6px; }
+  input, select { background: var(--card2); color: var(--txt); border: 1px solid var(--borda); border-radius: 7px;
+                  padding: 7px 10px; font: inherit; }
+  input[type=number] { width: 100%; }
+  input[type=range] { width: 100%; padding: 0; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px 20px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } .add { margin-left: 0; } }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--sub); margin: 0 0 10px; }
+  h3 { font-size: 13px; margin: 14px 0 8px; color: var(--azul); }
+  .card { background: var(--card); border: 1px solid var(--borda); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+  .card.parado { opacity: .6; }
+  .canal-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .canal-top .nome { font-size: 17px; font-weight: 600; }
+  .alca { cursor: grab; color: var(--sub); font-size: 20px; line-height: 1; padding: 2px 4px; user-select: none; touch-action: none; }
+  .card.arrastando .alca { cursor: grabbing; }
+  .alca:hover { color: var(--txt); }
+  .ordem-btns { display: inline-flex; flex-direction: column; gap: 1px; }
+  button.mini { padding: 0 6px; font-size: 9px; line-height: 13px; border-radius: 4px; }
+  .card.arrastando { opacity: .55; outline: 2px dashed var(--azul); outline-offset: 2px; }
+  .canal-top a { color: var(--sub); font-size: 12px; }
+  .acoes { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--card2); color: var(--sub); border: 1px solid var(--borda); }
+  .tag.kick { color: #53fc18; } .tag.twitch { color: #a970ff; } .tag.youtube { color: #ff4e45; }
+  .tag.ok { color: var(--verde); } .tag.erro { color: var(--vermelho); }
+  button { background: var(--azul); color: #06121f; border: 0; border-radius: 7px; padding: 7px 12px; font: inherit;
+           font-weight: 600; cursor: pointer; white-space: nowrap; }
+  button.sec { background: var(--card2); color: var(--txt); border: 1px solid var(--borda); }
+  button.perigo { background: transparent; color: var(--vermelho); border: 1px solid var(--borda); }
+  button:disabled { opacity: .5; cursor: default; }
+  .nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+  .num { background: var(--card2); border-radius: 8px; padding: 8px 10px; }
+  .num b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .num span { color: var(--sub); font-size: 12px; }
+  canvas.grafico { width: 100%; height: 140px; display: block; background: var(--card2); border-radius: 8px; }
+  .legenda-graf { display: flex; gap: 14px; font-size: 12px; color: var(--sub); margin-top: 6px; flex-wrap: wrap; }
+  .legenda-graf i { display: inline-block; width: 10px; height: 3px; vertical-align: middle; margin-right: 4px; }
+  .picos { margin-top: 10px; font-size: 13px; }
+  .pico { border-top: 1px solid var(--borda); padding: 6px 0; }
+  .pico .msgs { color: var(--sub); font-size: 12px; overflow-wrap: anywhere; }
+  /* ajustes */
+  .ajustes { display: none; margin: 12px 0; border: 1px solid var(--azul); border-radius: 10px; padding: 4px 14px 14px;
+             background: var(--bg); scroll-margin-top: 80px; }
+  .acoes button.ativo { background: var(--azul); color: #06121f; }
+  .campo select { width: 100%; }
+  .ajustes.aberto { display: block; }
+  .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  .campo label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .campo small { display: block; color: var(--sub); font-size: 11px; margin-top: 3px; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+  .presets .preset { background: var(--card2); color: var(--txt); border: 2px solid var(--borda); }
+  .presets .preset.ativo { background: var(--azul); color: #06121f; border-color: var(--azul); }
+  .presets .preset.ativo::before { content: "✓ "; }
+  .presets .preset.pendente { background: transparent; color: var(--azul); border: 2px dashed var(--azul); }
+  .preset-status { font-size: 12px; color: var(--txt); margin-left: 6px; }
+  textarea { width: 100%; background: var(--card2); color: var(--txt); border: 1px solid var(--borda);
+             border-radius: 7px; padding: 7px 10px; font: inherit; font-size: 13px; resize: vertical; }
+  .ignorados { margin-top: 6px; font-size: 12px; color: var(--sub); }
+  .ignorados div { padding: 3px 0; border-top: 1px dashed var(--borda); overflow-wrap: anywhere; }
+  .rodape-aj { display: flex; gap: 8px; align-items: center; margin-top: 14px; }
+  .msg-ok { color: var(--verde); font-size: 13px; } .msg-erro { color: var(--vermelho); font-size: 13px; }
+  .escala { display: flex; justify-content: space-between; font-size: 10px; color: var(--sub); margin-top: 2px; }
+  .previa { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+  .previa small { display: block; color: var(--sub); font-size: 11px; margin-top: 4px; max-width: 560px; }
+  .pv-tela { flex: 1; min-width: 260px; max-width: 560px; }
+  .pv-tela canvas, .pv-vert canvas { display: block; height: auto; border-radius: 6px; background: #000; }
+  .pv-tela canvas { width: 100%; }
+  .pv-vert canvas { width: 216px; }
+  .calib { position: relative; display: inline-block; max-width: 100%; margin-top: 8px; cursor: crosshair; user-select: none; }
+  .calib img { display: block; max-width: 100%; border-radius: 6px; }
+  .calib .ret { position: absolute; border: 2px solid var(--amarelo); background: rgba(255, 209, 102, .15); pointer-events: none; }
+  /* laterais */
+  .fila-item { background: var(--card2); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+  .fila-item .st { font-weight: 600; color: var(--amarelo); }
+  .fila-item .st.pronto { color: var(--verde); } .fila-item .st.erro { color: var(--vermelho); }
+  .corte { margin-bottom: 14px; }
+  .corte video { width: 100%; max-height: 420px; background: #000; border-radius: 8px; }
+  .corte .meta { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .corte .titulo { font-weight: 600; }
+  .vazio { color: var(--sub); font-size: 13px; }
+  #aviso { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--card2);
+           border: 1px solid var(--borda); padding: 10px 16px; border-radius: 8px; display: none; z-index: 9; }
+</style>
+</head>
+<body>
+<header>
+  <div class="pulso" id="pulso"></div>
+  <h1>Painel de Cortes</h1>
+  <nav><a href="/" class="atual">Painel ao vivo</a><a href="/videos" title="vídeos novos (ainda não assistidos)">🎬 Vídeos <span class="badge" id="badge-novos" hidden></span></a></nav>
+  <form class="add" id="form-add">
+    <input id="url-add" placeholder="Cole a URL da live (kick.com/…, twitch.tv/…, youtube.com/@…)" required>
+    <button type="submit">▶ Monitorar</button>
+  </form>
+  <div class="info" id="info">conectando…</div>
+  <div class="uso" id="uso" title="uso do notebook"></div>
+  <button class="sec" id="btn-celular" title="abrir o painel no celular (mesma rede Wi-Fi)">📱 Celular</button>
+</header>
+<div class="fundo-modal" id="cel-fundo">
+  <div class="modal-cel">
+    <h3 style="margin:0 0 6px">📱 Abrir no celular</h3>
+    <div id="cel-corpo"></div>
+    <div style="text-align:right;margin-top:12px"><button class="sec" id="cel-fechar">Fechar</button></div>
+  </div>
+</div>
+<main>
+  <section id="canais"><div class="vazio" id="sem-canais">Nenhum canal. Cole a URL de uma live acima.</div></section>
+  <aside>
+    <div class="card"><h2>Fila</h2><div id="fila"><div class="vazio">vazia</div></div></div>
+    <div class="card"><h2>Últimos cortes · <a href="/videos" style="color:var(--azul);text-transform:none;letter-spacing:0">ver todos em Vídeos →</a></h2><div id="cortes"><div class="vazio">nenhum ainda</div></div></div>
+  </aside>
+</main>
+<div id="aviso"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtHora = t => new Date(t * 1000).toLocaleTimeString("pt-BR");
+let cortesRenderizados = "";
+let arrastando = null, salvandoOrdem = false;
+
+async function salvarOrdem() {
+  const nomes = [...document.querySelectorAll("#canais > .card")].map(x => x.id.slice(6));
+  salvandoOrdem = true;
+  try { await api("/api/ordem", {nomes}); aviso("Ordem salva"); }
+  catch (e) { aviso(e.message, true); }
+  finally { setTimeout(() => salvandoOrdem = false, 2500); }
+}
+let ultimoEstado = null;
+
+function aviso(txt, erro) {
+  const a = $("#aviso"); a.textContent = txt; a.style.color = erro ? "var(--vermelho)" : "var(--verde)";
+  a.style.display = "block"; clearTimeout(a._t); a._t = setTimeout(() => a.style.display = "none", 4000);
+}
+async function api(caminho, corpo) {
+  const r = await fetch(caminho, {method: "POST", headers: {"Content-Type": "application/json"},
+                                  body: corpo ? JSON.stringify(corpo) : undefined});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.erro) throw new Error(j.erro || ("HTTP " + r.status));
+  return j;
+}
+
+// ---------------------------------------------------------------- adicionar live
+$("#form-add").onsubmit = async ev => {
+  ev.preventDefault();
+  const url = $("#url-add").value.trim();
+  try { const j = await api("/api/canais", {url}); aviso("Monitorando " + j.nome); $("#url-add").value = ""; atualizar(); }
+  catch (e) { aviso(e.message, true); }
+};
+
+// ---------------------------------------------------------------- campos de ajuste
+const CAMPOS = [
+  ["detector", "multiplicador", "Pico = quantas vezes o normal", "maior → menos cortes", 0.1],
+  ["detector", "minimo_absoluto", "Pontuação mínima", "ignora picos pequenos", 1],
+  ["detector", "min_usuarios_unicos", "Mín. de pessoas diferentes", "na janela; evita spam", 1],
+  ["detector", "pausa_entre_cortes_seg", "Pausa entre cortes (s)", "evita cortes repetidos", 5],
+  ["corte", "antes_seg", "Segundos antes do pico", "o lance acontece antes do chat reagir", 1],
+  ["corte", "depois_seg", "Segundos depois do pico", "", 1],
+  [null, "offset_seg", "Sincronia (s)", "negativo = corte começa mais cedo", 1],
+  ["detector", "janela_seg", "Janela de contagem (s)", "avançado", 1],
+  ["detector", "base_minutos", "Minutos p/ calcular o normal", "avançado", 1],
+  ["detector", "limite_saudacoes", "Ignorar pico se saudações ≥", "0.5 = metade do chat dizendo salve/oi", 0.05],
+  ["audio", "limiar_db", "🔊 Grito: dB acima do normal", "maior → só gritos mais fortes", 1],
+  ["audio", "confirmacao_chat", "🔊 Grito: chat precisa reagir ≥", "× o normal nos 15 s seguintes", 0.1],
+];
+const CHAVES_PRESET = ["multiplicador", "minimo_absoluto", "min_usuarios_unicos"];
+const PRESETS = {
+  "Chat pequeno": {multiplicador: 2.2, minimo_absoluto: 8, min_usuarios_unicos: 5},
+  "Normal": {multiplicador: 3, minimo_absoluto: 25, min_usuarios_unicos: 15},
+  "Chat gigante": {multiplicador: 3.5, minimo_absoluto: 80, min_usuarios_unicos: 40},
+};
+
+function montarAjustes(box, c) {
+  const cfg = c.config;
+  const val = (sec, k) => sec ? cfg[sec][k] : cfg[k];
+  box.innerHTML = `
+    <h3>Atalhos de sensibilidade</h3>
+    <div class="presets">${Object.keys(PRESETS).map(p => `<button type="button" class="preset" data-preset="${p}">${p}</button>`).join("")}
+      <span class="preset-status" data-v="preset-status"></span></div>
+    <div class="grade">${CAMPOS.map(([sec, k, rot, dica, passo]) => `
+      <div class="campo"><label>${rot}</label>
+        <input type="number" step="${passo}" data-sec="${sec || ""}" data-k="${k}" value="${val(sec, k) ?? ""}">
+        <small>${dica}</small></div>`).join("")}
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer">
+      <input type="checkbox" data-k="audio_ativo" ${cfg.audio.ativo ? "checked" : ""} style="width:auto">
+      <span><b>🔊 Cortar também quando o streamer gritar/rir alto</b>
+      <small style="color:var(--sub)"> (o chat ainda precisa reagir um pouco, para não cortar todo tiro/explosão do jogo)</small></span></label>
+    <h3>Saudações e pedidos que não contam como reação</h3>
+    <textarea data-k="saudacoes" rows="2">${esc((cfg.detector.saudacoes || []).join(", "))}</textarea>
+    <small style="display:block;color:var(--sub);font-size:11px;margin-top:3px">separe por vírgula · a letra final pode repetir (SALVE pega SALVEEEE) ·
+      mensagem com reação junto (ex.: "SALVE KKKK") conta normalmente</small>
+    <h3>Legenda</h3>
+    <div class="grade">
+      <div class="campo" style="grid-column: span 2"><label>Falas do jogo (personagens do GTA)</label>
+        <select data-k="falas_jogo">
+          <option value="silencio" ${cfg.falas_jogo === "silencio" ? "selected" : ""}>Mostrar só quando o streamer estiver em silêncio (estilo diferente)</option>
+          <option value="nunca" ${cfg.falas_jogo === "nunca" ? "selected" : ""}>Nunca mostrar (só a fala do streamer)</option>
+          <option value="desligado" ${cfg.falas_jogo === "desligado" ? "selected" : ""}>Desligado: legendar tudo igual (como era antes)</option>
+        </select>
+        <small>detecta pelo idioma: o GTA é dublado em inglês/espanhol e o streamer fala português ·
+          fala do jogo sai <i style="color:#a0e0ff">menor, em itálico e azul-claro</i> · vale a partir do próximo corte</small></div>
+      <div class="campo"><label>Tradução</label>
+        <label style="font-weight:400;display:flex;gap:8px;align-items:center;cursor:pointer">
+          <input type="checkbox" data-k="traduzir_jogo" ${cfg.traduzir_jogo ? "checked" : ""} style="width:auto">
+          Traduzir falas do jogo para português</label>
+        <small>offline, no próprio notebook · só vale no modo "silêncio"</small></div>
+      <div class="campo" style="grid-column: span 2"><label>Crédito do streamer no vídeo</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-weight:400;display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap">
+            <input type="checkbox" data-k="credito_ativo" ${cfg.credito_ativo ? "checked" : ""} style="width:auto"> mostrar</label>
+          <input type="text" data-k="credito_texto" value="${esc(cfg.credito_texto)}" placeholder="${esc(cfg.credito_padrao)}" maxlength="60" style="flex:1">
+        </div>
+        <small>pequeno e semitransparente, embaixo do vídeo · vazio = usa o endereço do canal (${esc(cfg.credito_padrao)})</small></div>
+    </div>
+    <h3>Layout do corte</h3>
+    <div class="grade">
+      <div class="campo"><label>Layout</label>
+        <select data-k="layout">
+          <option value="camera_gameplay" ${cfg.layout === "camera_gameplay" ? "selected" : ""}>Webcam em cima + gameplay</option>
+          <option value="so_gameplay" ${cfg.layout === "so_gameplay" ? "selected" : ""}>Só gameplay</option>
+        </select><small>webcam exige calibrar abaixo</small></div>
+      <div class="campo"><label>Posição da gameplay</label>
+        <input type="range" min="0" max="1" step="0.05" data-k="gameplay_offset_x" value="${cfg.gameplay_offset_x}">
+        <div class="escala"><span>◀ esquerda</span><span>centro</span><span>direita ▶</span></div>
+        <small data-v="gx"></small></div>
+      <div class="campo"><label>Webcam</label>
+        <div data-v="cam" style="font-size:12px;color:var(--sub)">${cfg.camera ? "calibrada ✓" : "não calibrada"}</div>
+        <button type="button" class="sec" data-acao="calibrar" style="margin-top:4px">📷 Calibrar webcam</button></div>
+    </div>
+    <div data-v="calib-area"></div>
+    <h3 style="display:flex;align-items:center">Prévia do corte
+      <button type="button" class="sec" data-acao="previa" style="margin-left:auto">🔄 Novo print</button></h3>
+    <div class="previa">
+      <div class="pv-tela"><canvas data-v="pv-tela"></canvas>
+        <small><b style="color:var(--azul)">■ azul</b> = parte da tela que vira a gameplay do corte ·
+          <b style="color:#fff">┅ tracejado</b> = posição salva ·
+          <b style="color:var(--amarelo)">■ amarelo</b> = webcam</small></div>
+      <div class="pv-vert"><canvas data-v="pv-vert" width="216" height="384"></canvas>
+        <small>como o corte vai ficar</small></div>
+    </div>
+    <div data-v="pv-msg" style="font-size:12px;color:var(--sub)"></div>
+    <div class="rodape-aj">
+      <button type="button" data-acao="salvar">💾 Aplicar ajustes</button>
+      <span data-v="msg"></span>
+    </div>`;
+  box._camera = cfg.camera;
+  box._salvoDet = {...cfg.detector};
+  // destaca o atalho que corresponde aos valores do formulário e diz se já está aplicado
+  const qualPreset = vals => Object.keys(PRESETS).find(n =>
+    CHAVES_PRESET.every(k => Number(PRESETS[n][k]) === Number(vals[k])));
+  box._marcarPreset = () => {
+    const form = {};
+    CHAVES_PRESET.forEach(k => form[k] = box.querySelector(`input[data-k="${k}"]`).value);
+    const noForm = qualPreset(form), emUso = qualPreset(box._salvoDet);
+    box.querySelectorAll("[data-preset]").forEach(b => {
+      b.classList.toggle("ativo", b.dataset.preset === noForm);
+      b.classList.toggle("pendente", b.dataset.preset === noForm && noForm !== emUso);
+    });
+    const alterado = CHAVES_PRESET.some(k => Number(form[k]) !== Number(box._salvoDet[k]));
+    box.querySelector('[data-v="preset-status"]').innerHTML =
+      !alterado ? `Em uso: <b>${esc(emUso || "Personalizado")}</b>`
+                : `Selecionado: <b>${esc(noForm || "Personalizado")}</b> · <span style="color:var(--amarelo)">clique em 💾 Aplicar</span>` +
+                  ` <span style="color:var(--sub)">(em uso: ${esc(emUso || "Personalizado")})</span>`;
+  };
+  box.querySelectorAll("[data-preset]").forEach(b => b.onclick = () => {
+    const p = PRESETS[b.dataset.preset];
+    for (const k in p) box.querySelector(`input[data-k="${k}"]`).value = p[k];
+    box._marcarPreset();
+  });
+  CHAVES_PRESET.forEach(k => box.querySelector(`input[data-k="${k}"]`).oninput = box._marcarPreset);
+  box._marcarPreset();
+  const gx = box.querySelector('input[data-k="gameplay_offset_x"]');
+  const lay = box.querySelector('select[data-k="layout"]');
+  box._salvo = {gx: Number(cfg.gameplay_offset_x), camera: cfg.camera};
+  box._cfgPrevia = {zoom: cfg.zoom_so_gameplay || 1.35, legendaY: cfg.legenda_y || 0.36};
+  const pct = v => Math.round(Number(v) * 100) + "%";
+  box._previa = () => {
+    const mudou = Number(gx.value) !== box._salvo.gx;
+    box.querySelector('[data-v="gx"]').innerHTML = `Nova: <b style="color:var(--azul)">${pct(gx.value)}</b> · Salva: ${pct(box._salvo.gx)}` +
+      (mudou ? ' · <span style="color:var(--amarelo)">não aplicada</span>' : "");
+    desenharPrevia(box);
+  };
+  gx.oninput = box._previa;
+  lay.onchange = box._previa;
+  box.querySelector('input[data-k="credito_ativo"]').onchange = box._previa;
+  box.querySelector('input[data-k="credito_texto"]').oninput = box._previa;
+  box.querySelector('[data-acao="previa"]').onclick = () => carregarPrint(box, c.nome);
+  box._previa();
+  carregarPrint(box, c.nome);
+  box.querySelector('[data-acao="calibrar"]').onclick = () => calibrar(box, c.nome);
+  box.querySelector('[data-acao="salvar"]').onclick = async () => {
+    const dados = {detector: {}, corte: {}, audio: {}};
+    box.querySelectorAll("input[data-k][type=number]").forEach(i => {
+      if (i.dataset.sec) dados[i.dataset.sec][i.dataset.k] = i.value; else dados[i.dataset.k] = i.value;
+    });
+    dados.layout = box.querySelector('select[data-k="layout"]').value;
+    dados.gameplay_offset_x = gx.value;
+    dados.camera = box._camera || null;
+    dados.detector.saudacoes = box.querySelector('textarea[data-k="saudacoes"]').value;
+    dados.falas_jogo = box.querySelector('select[data-k="falas_jogo"]').value;
+    dados.audio.ativo = box.querySelector('input[data-k="audio_ativo"]').checked;
+    dados.traduzir_jogo = box.querySelector('input[data-k="traduzir_jogo"]').checked;
+    dados.credito_ativo = box.querySelector('input[data-k="credito_ativo"]').checked;
+    dados.credito_texto = box.querySelector('input[data-k="credito_texto"]').value;
+    const msg = box.querySelector('[data-v="msg"]');
+    try {
+      const j = await api("/api/ajustes/" + encodeURIComponent(c.nome), dados);
+      box.querySelector('select[data-k="layout"]').value = j.config.layout;
+      box._camera = j.config.camera;
+      box._salvo = {gx: Number(j.config.gameplay_offset_x), camera: j.config.camera};
+      box._salvoDet = {...j.config.detector};
+      box.querySelector('textarea[data-k="saudacoes"]').value = (j.config.detector.saudacoes || []).join(", ");
+      box._marcarPreset();
+      box.querySelector('[data-v="cam"]').textContent = j.config.camera ? "calibrada ✓" : "não calibrada";
+      fecharCalibracao(box);
+      box._previa();
+      msg.innerHTML = '<span class="msg-ok">✓ aplicado e salvo' +
+        (dados.layout !== j.config.layout ? " (layout voltou para só gameplay: calibre a webcam)" : "") + "</span>";
+    } catch (e) { msg.innerHTML = '<span class="msg-erro">' + esc(e.message) + "</span>"; }
+  };
+}
+
+// ---------------------------------------------------------------- prévia do layout
+function carregarPrint(box, nome) {
+  const msg = box.querySelector('[data-v="pv-msg"]');
+  msg.textContent = "carregando print da live…";
+  fetch("/api/frame/" + encodeURIComponent(nome)).then(async r => {
+    if (!r.ok) throw new Error((await r.json()).erro);
+    const url = URL.createObjectURL(await r.blob());
+    const img = new Image();
+    img.onload = () => {
+      if (box._img) URL.revokeObjectURL(box._img.src);
+      box._img = img; msg.textContent = ""; box._previa();
+    };
+    img.src = url;
+  }).catch(e => { msg.innerHTML = '<span class="msg-erro">' + esc(e.message) + "</span>"; desenharPrevia(box); });
+}
+
+// mesma matemática do app/editor.py (crop da gameplay e da webcam)
+function areaGameplay(W, H, layout, off, zoom) {
+  const gw = layout === "camera_gameplay" ? Math.min(W, H * 1080 / 1312) : W / zoom;
+  return {x: (W - gw) * off, y: 0, w: gw, h: H};
+}
+
+function desenharPrevia(box) {
+  const cvT = box.querySelector('[data-v="pv-tela"]'), cvV = box.querySelector('[data-v="pv-vert"]');
+  if (!cvT) return;
+  const img = box._img;
+  const layout = box.querySelector('select[data-k="layout"]').value;
+  const off = Number(box.querySelector('input[data-k="gameplay_offset_x"]').value);
+  const cam = box._camera, {zoom, legendaY} = box._cfgPrevia;
+  const css = getComputedStyle(document.documentElement);
+  const azul = css.getPropertyValue("--azul").trim(), amarelo = css.getPropertyValue("--amarelo").trim();
+  const ctxV = cvV.getContext("2d");
+  ctxV.fillStyle = "#000"; ctxV.fillRect(0, 0, cvV.width, cvV.height);
+  if (!img) {
+    cvT.width = 10; cvT.height = 10;
+    ctxV.fillStyle = css.getPropertyValue("--sub"); ctxV.font = "12px Segoe UI";
+    ctxV.fillText("sem print", 70, 190);
+    return;
+  }
+  const W = img.naturalWidth, H = img.naturalHeight;
+  // ---- tela da live com as áreas marcadas
+  const larg = Math.min(cvT.parentElement.clientWidth || 480, 560);
+  cvT.width = larg; cvT.height = Math.round(larg * H / W);
+  const k = larg / W, ctx = cvT.getContext("2d");
+  ctx.drawImage(img, 0, 0, cvT.width, cvT.height);
+  const g = areaGameplay(W, H, layout, off, zoom);
+  ctx.fillStyle = "rgba(0,0,0,.6)";                       // escurece o que fica de fora
+  ctx.fillRect(0, 0, g.x * k, cvT.height);
+  ctx.fillRect((g.x + g.w) * k, 0, cvT.width - (g.x + g.w) * k, cvT.height);
+  ctx.lineWidth = 3; ctx.strokeStyle = azul;
+  ctx.strokeRect(g.x * k + 1.5, 1.5, g.w * k - 3, cvT.height - 3);
+  const gs = areaGameplay(W, H, layout, box._salvo.gx, zoom);  // posição salva
+  if (Math.abs(gs.x - g.x) > 1) {
+    ctx.setLineDash([6, 5]); ctx.lineWidth = 2; ctx.strokeStyle = "#fff";
+    ctx.strokeRect(gs.x * k + 1, 1, gs.w * k - 2, cvT.height - 2); ctx.setLineDash([]);
+  }
+  if (layout === "camera_gameplay" && cam) {
+    ctx.lineWidth = 2; ctx.strokeStyle = amarelo;
+    ctx.strokeRect(cam.x * cvT.width, cam.y * cvT.height, cam.w * cvT.width, cam.h * cvT.height);
+  }
+  // ---- miniatura vertical 9:16
+  const s = cvV.width / 1080;
+  if (layout === "camera_gameplay" && cam) {
+    let cx = cam.x * W, cy = cam.y * H, cw = cam.w * W, ch = cam.h * H;
+    const alvo = 1080 / 608;                                // cobre 1080x608 sem distorcer
+    if (cw / ch > alvo) { const n = ch * alvo; cx += (cw - n) / 2; cw = n; }
+    else { const n = cw / alvo; cy += (ch - n) / 2; ch = n; }
+    ctxV.drawImage(img, cx, cy, cw, ch, 0, 0, cvV.width, 608 * s);
+    ctxV.drawImage(img, g.x, 0, g.w, H, 0, 608 * s, cvV.width, 1312 * s);
+  } else {
+    const sw = H * 1080 / 1920;                             // fundo desfocado
+    ctxV.filter = "blur(4px) brightness(0.8)";
+    ctxV.drawImage(img, (W - sw) / 2, 0, sw, H, 0, 0, cvV.width, cvV.height);
+    ctxV.filter = "none";
+    const h = cvV.width * H / g.w;
+    ctxV.drawImage(img, g.x, 0, g.w, H, 0, (cvV.height - h) / 2, cvV.width, h);
+  }
+  ctxV.font = "bold 15px 'Arial Black', sans-serif"; ctxV.textAlign = "center";
+  ctxV.lineWidth = 4; ctxV.strokeStyle = "#000"; ctxV.fillStyle = "#fff";
+  const ly = cvV.height * legendaY;
+  ctxV.strokeText("LEGENDA", cvV.width / 2 - 28, ly); ctxV.fillText("LEGENDA", cvV.width / 2 - 28, ly);
+  ctxV.fillStyle = "#ffff00"; ctxV.strokeText("AQUI", cvV.width / 2 + 46, ly); ctxV.fillText("AQUI", cvV.width / 2 + 46, ly);
+  // crédito do streamer (mesma posição do vídeo final: embaixo, centralizado)
+  const cb = box.querySelector('input[data-k="credito_ativo"]'), ct = box.querySelector('input[data-k="credito_texto"]');
+  if (cb && cb.checked) {
+    const txt = (ct.value.trim() || ct.placeholder);
+    ctxV.font = "bold 7px Arial, sans-serif"; ctxV.lineWidth = 2; ctxV.globalAlpha = .8;
+    ctxV.strokeText(txt, cvV.width / 2, cvV.height - 9); ctxV.fillStyle = "#fff"; ctxV.fillText(txt, cvV.width / 2, cvV.height - 9);
+    ctxV.globalAlpha = 1;
+  }
+  ctxV.textAlign = "start";
+}
+
+// ---------------------------------------------------------------- calibração da webcam
+function fecharCalibracao(box) {
+  const area = box.querySelector('[data-v="calib-area"]');
+  const img = area.querySelector("img");
+  if (img && img.src) URL.revokeObjectURL(img.src);
+  area.innerHTML = "";
+  const b = box.querySelector('[data-acao="calibrar"]');
+  if (b) b.textContent = "📷 Calibrar webcam";
+}
+
+function calibrar(box, nome) {
+  const area = box.querySelector('[data-v="calib-area"]');
+  if (area.innerHTML.trim()) { fecharCalibracao(box); return; }   // 2º clique fecha
+  box.querySelector('[data-acao="calibrar"]').textContent = "✕ Fechar calibração";
+  area.innerHTML = `<h3 style="display:flex;align-items:center">Arraste um retângulo sobre a webcam
+      <button type="button" class="sec" data-a="fechar" style="margin-left:auto" title="fechar">✕ Fechar</button></h3>
+    <div class="calib"><img alt="print da live"><div class="ret" style="display:none"></div></div>
+    <div class="rodape-aj">
+      <button type="button" class="sec" data-a="novo">🔄 Outro print</button>
+      <button type="button" class="sec" data-a="sem">Streamer sem webcam</button>
+      <button type="button" class="perigo" data-a="fechar">✕ Fechar calibração</button>
+      <span data-v="cmsg" style="font-size:12px;color:var(--sub)">carregando print…</span></div>`;
+  area.querySelectorAll('[data-a="fechar"]').forEach(b => b.onclick = () => fecharCalibracao(box));
+  const wrap = area.querySelector(".calib"), img = wrap.querySelector("img"), ret = wrap.querySelector(".ret");
+  const cmsg = area.querySelector('[data-v="cmsg"]');
+  const desenhar = cam => {
+    if (!cam) { ret.style.display = "none"; return; }
+    Object.assign(ret.style, {display: "block", left: cam.x * 100 + "%", top: cam.y * 100 + "%",
+                              width: cam.w * 100 + "%", height: cam.h * 100 + "%"});
+  };
+  const carregar = () => {
+    cmsg.textContent = "carregando print…";
+    fetch("/api/frame/" + encodeURIComponent(nome)).then(async r => {
+      if (!r.ok) throw new Error((await r.json()).erro);
+      img.src = URL.createObjectURL(await r.blob());
+      cmsg.textContent = "clique e arraste sobre o rosto/câmera do streamer";
+      desenhar(box._camera);
+    }).catch(e => cmsg.innerHTML = '<span class="msg-erro">' + esc(e.message) + "</span>");
+  };
+  let ini = null;
+  const pos = ev => { const r = img.getBoundingClientRect();
+    return {x: Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height))}; };
+  wrap.onpointerdown = ev => { if (!img.src) return; ini = pos(ev); wrap.setPointerCapture(ev.pointerId); ev.preventDefault(); };
+  wrap.onpointermove = ev => { if (!ini) return; const p = pos(ev);
+    box._camera = {x: Math.min(ini.x, p.x), y: Math.min(ini.y, p.y), w: Math.abs(p.x - ini.x), h: Math.abs(p.y - ini.y)};
+    desenhar(box._camera); if (box._previa) box._previa(); };
+  wrap.onpointerup = () => { if (!ini) return; ini = null;
+    if (box._camera && box._camera.w > 0.02 && box._camera.h > 0.02) {
+      box.querySelector('select[data-k="layout"]').value = "camera_gameplay";
+      box.querySelector('[data-v="cam"]').textContent = "novo retângulo: clique em Aplicar";
+      cmsg.textContent = "ok! agora clique em 💾 Aplicar ajustes";
+    } };
+  area.querySelector('[data-a="novo"]').onclick = carregar;
+  area.querySelector('[data-a="sem"]').onclick = () => {
+    box._camera = null; desenhar(null);
+    box.querySelector('select[data-k="layout"]').value = "so_gameplay";
+    if (box._previa) box._previa();
+    cmsg.textContent = "sem webcam: clique em 💾 Aplicar ajustes";
+  };
+  carregar();
+}
+
+// ---------------------------------------------------------------- cartões dos canais
+function cardCanal(c) {
+  let el = document.getElementById("canal-" + c.nome);
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "card"; el.id = "canal-" + c.nome;
+    el.innerHTML = `
+      <div class="canal-top">
+        <span class="alca" data-alca title="arraste para mudar a ordem">⠿</span>
+        <span class="ordem-btns"><button class="sec mini" data-a="subir" title="subir">▲</button><button class="sec mini" data-a="descer" title="descer">▼</button></span>
+        <span class="nome">${esc(c.nome)}</span>
+        <span class="tag ${esc(c.plataforma)}">${esc(c.plataforma)}</span>
+        <span class="tag" data-k="grav"></span>
+        <span class="tag" data-k="chat"></span>
+        <a href="${esc(c.url)}" target="_blank" rel="noopener">abrir live ↗</a>
+        <div class="acoes">
+          <button data-a="cortar">✂ Cortar agora</button>
+          <button class="sec" data-a="ajustes">⚙ Ajustes</button>
+          <button class="sec" data-a="liga"></button>
+          <button class="perigo" data-a="remover" title="remover canal">🗑</button>
+        </div>
+      </div>
+      <div class="nums">
+        <div class="num"><b data-k="pont">0</b><span>pontuação (janela)</span></div>
+        <div class="num"><b data-k="usu">0</b><span>pessoas na janela</span></div>
+        <div class="num"><b data-k="base">0</b><span>normal (mediana)</span></div>
+        <div class="num"><b data-k="lim">0</b><span>limite p/ pico</span></div>
+      </div>
+      <canvas data-k="grafico" class="grafico"></canvas>
+      <div class="legenda-graf">
+        <span><i style="background:var(--azul)"></i>reação do chat</span>
+        <span><i style="background:var(--vermelho)"></i>limite</span>
+        <span><i style="background:var(--amarelo)"></i>pico cortado</span>
+        <span data-k="total" style="margin-left:auto"></span>
+      </div>
+      <div class="picos" data-k="picos"></div>
+      <div class="ignorados" data-k="ignorados"></div>`;
+    // ajustes logo abaixo dos botões (antes ficavam no fim do cartão, fora da tela)
+    const aj = document.createElement("div");
+    aj.className = "ajustes";
+    el.querySelector(".canal-top").after(aj);
+    const b = a => el.querySelector(`[data-a="${a}"]`);
+    b("cortar").onclick = async ev => {
+      ev.target.disabled = true;
+      try { await api("/api/cortar/" + encodeURIComponent(c.nome)); aviso("Corte manual de " + c.nome + " na fila"); }
+      catch (e) { aviso(e.message, true); }
+      setTimeout(() => ev.target.disabled = false, 3000);
+    };
+    b("ajustes").onclick = () => {
+      const box = el.querySelector(".ajustes");
+      const abriu = box.classList.toggle("aberto");
+      b("ajustes").textContent = abriu ? "✕ Fechar ajustes" : "⚙ Ajustes";
+      b("ajustes").classList.toggle("ativo", abriu);
+      if (abriu) {
+        montarAjustes(box, ultimoEstado.canais.find(x => x.nome === c.nome));
+        box.scrollIntoView({behavior: "smooth", block: "start"});
+      }
+    };
+    b("liga").onclick = async () => {
+      const atual = ultimoEstado.canais.find(x => x.nome === c.nome);
+      try { await api((atual.rodando ? "/api/parar/" : "/api/iniciar/") + encodeURIComponent(c.nome)); atualizar(); }
+      catch (e) { aviso(e.message, true); }
+    };
+    b("remover").onclick = async () => {
+      if (!confirm(`Remover ${c.nome} da lista? (os cortes já feitos continuam na pasta)`)) return;
+      try { await api("/api/remover/" + encodeURIComponent(c.nome)); el.remove(); }
+      catch (e) { aviso(e.message, true); }
+    };
+    // ---- reordenar: botões ▲ ▼
+    b("subir").onclick = () => { const ant = el.previousElementSibling; if (ant && ant.classList.contains("card")) { ant.before(el); salvarOrdem(); } };
+    b("descer").onclick = () => { const prox = el.nextElementSibling; if (prox && prox.classList.contains("card")) { prox.after(el); salvarOrdem(); } };
+    // ---- reordenar: arrastar pela alça ⠿ (eventos de ponteiro: funciona com mouse e toque)
+    const alca = el.querySelector("[data-alca]");
+    alca.onpointerdown = ev => {
+      ev.preventDefault();
+      // obs.: NÃO usar setPointerCapture na alça — mover o cartão no DOM solta a captura e o
+      // "soltar" nunca chegava (a ordem não era salva). Escuta na janela inteira.
+      arrastando = el; el.classList.add("arrastando");
+      const ordemInicial = [...document.querySelectorAll("#canais > .card")].map(x => x.id).join("|");
+      const mover = mv => {
+        // acha o cartão sob o ponteiro e move o arrastado para antes/depois dele
+        for (const outro of document.querySelectorAll("#canais > .card")) {
+          if (outro === el) continue;
+          const r = outro.getBoundingClientRect();
+          if (mv.clientY >= r.top && mv.clientY <= r.bottom) {
+            if (mv.clientY < r.top + r.height / 2) outro.before(el); else outro.after(el);
+            break;
+          }
+        }
+        // rola a página perto das bordas
+        if (mv.clientY < 90) scrollBy(0, -12); else if (mv.clientY > innerHeight - 40) scrollBy(0, 12);
+      };
+      const soltar = () => {
+        removeEventListener("pointermove", mover);
+        removeEventListener("pointerup", soltar);
+        removeEventListener("pointercancel", soltar);
+        el.classList.remove("arrastando");
+        arrastando = null;
+        const ordemFinal = [...document.querySelectorAll("#canais > .card")].map(x => x.id).join("|");
+        if (ordemFinal !== ordemInicial) salvarOrdem();
+      };
+      addEventListener("pointermove", mover);
+      addEventListener("pointerup", soltar);
+      addEventListener("pointercancel", soltar);
+    };
+    $("#canais").appendChild(el);
+  }
+  const q = k => el.querySelector(`[data-k="${k}"]`);
+  el.classList.toggle("parado", !c.rodando);
+  el.querySelector('[data-a="liga"]').textContent = c.rodando ? "⏸ Parar" : "▶ Iniciar";
+  el.querySelector('[data-a="cortar"]').disabled = !c.rodando;
+  const g = q("grav");
+  g.textContent = c.gravando ? "● gravando " + (c.ultimo_segmento || "") : "○ " + c.gravacao_msg;
+  g.className = "tag " + (c.gravando ? "ok" : "erro");
+  const ch = q("chat");
+  ch.textContent = (c.chat_ok ? "💬 " : "⚠ ") + c.chat_msg;
+  ch.className = "tag " + (c.chat_ok ? "ok" : "erro");
+  q("pont").textContent = Math.round(c.pontuacao);
+  q("usu").textContent = c.usuarios;
+  q("base").textContent = c.base;
+  q("lim").textContent = c.limite;
+  q("total").textContent = (c.audio_db != null
+    ? `🔊 voz ${c.audio_db} dB (normal ${c.audio_base}, grito a partir de ${c.audio_limiar}) · ` : "") + c.msgs_total + " msgs lidas";
+  q("ignorados").innerHTML = (c.ignorados || []).slice().reverse().slice(0, 3).map(i =>
+    `<div>🚫 ${esc(i.hora_txt)} · pico ignorado: ${esc(i.motivo)} · ${i.exemplos.map(([t, n]) => esc(t) + " ×" + n).join(" · ")}</div>`).join("");
+  q("picos").innerHTML = c.picos.slice().reverse().slice(0, 2).map(p => `
+    <div class="pico"><b>${esc(p.hora_txt)}</b> · ${p.manual ? "manual" : (p.gatilho === "audio" ? "🔊 grito/risada · chat " : "") + p.relativo + "x o normal"}
+      · <i>${esc(p.sugestao_titulo || "")}</i>
+      <div class="msgs">${p.top_msgs.slice(0, 5).map(([t, n]) => esc(t.slice(0, 40)) + " ×" + n).join(" · ")}</div>
+    </div>`).join("");
+  desenharGrafico(q("grafico"), c);
+}
+
+function desenharGrafico(cv, c) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const ctx = cv.getContext("2d"); ctx.scale(dpr, dpr);
+  const css = getComputedStyle(document.documentElement);
+  const hist = c.historico;
+  ctx.fillStyle = css.getPropertyValue("--sub"); ctx.font = "11px Segoe UI";
+  if (hist.length < 2) { ctx.fillText(c.rodando ? "aguardando chat…" : "canal parado", 10, 20); return; }
+  const t1 = hist[hist.length - 1][0], t0 = t1 - 600;
+  const maxY = Math.max(10, ...hist.map(p => Math.max(p[1], p[2]))) * 1.1;
+  const X = t => (t - t0) / 600 * w, Y = v => h - 4 - v / maxY * (h - 10);
+  ctx.fillStyle = css.getPropertyValue("--amarelo");
+  for (const p of c.picos) if (p.hora >= t0) { ctx.globalAlpha = .25; ctx.fillRect(X(p.hora) - 2, 0, 4, h); }
+  ctx.globalAlpha = 1;
+  const linha = (idx, cor, larg) => {
+    ctx.beginPath(); ctx.strokeStyle = cor; ctx.lineWidth = larg;
+    hist.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[idx])) : ctx.moveTo(X(p[0]), Y(p[idx])));
+    ctx.stroke();
+  };
+  linha(2, css.getPropertyValue("--vermelho"), 1.5);
+  linha(1, css.getPropertyValue("--azul"), 2);
+  ctx.fillStyle = css.getPropertyValue("--sub");
+  ctx.fillText(Math.round(maxY), 4, 12); ctx.fillText("-10 min", 4, h - 6); ctx.fillText("agora", w - 34, h - 6);
+}
+
+function renderFila(fila) {
+  $("#fila").innerHTML = fila.length ? fila.map(i => `
+    <div class="fila-item"><b>${esc(i.canal)}</b> · ${esc(i.hora_txt)}
+      · <span class="st ${i.status === "pronto" ? "pronto" : i.status === "erro" ? "erro" : ""}">${esc(i.status)}</span>
+      <div style="color:var(--sub);font-size:12px">${Object.entries(i.etapas).map(([k, v]) => k + " " + v + "s").join(" · ")}
+      ${i.erro ? "<br>" + esc(i.erro) : ""}</div></div>`).join("") : '<div class="vazio">vazia</div>';
+}
+
+function renderCortes(cortes) {
+  const chave = cortes.map(c => c.url).join("|");
+  if (chave === cortesRenderizados) return;  // não recria os players à toa
+  cortesRenderizados = chave;
+  $("#cortes").innerHTML = cortes.length ? cortes.slice(0, 3).map(c => `
+    <div class="corte">
+      <video src="${esc(c.url)}" controls preload="metadata"></video>
+      <div class="titulo">${esc(c.canal)} · ${esc(c.hora_txt)} ${c.manual ? "(manual)" : "· " + c.relativo + "x"}</div>
+      <div class="meta">pronto ${c.pronto_em_seg}s após o pico · sugestão: ${esc(c.titulo || "-")}</div>
+      <div class="meta">“${esc(c.transcricao)}”</div>
+      <div class="meta"><a href="${esc(c.url)}" download style="color:var(--azul)">baixar</a></div>
+    </div>`).join("") : '<div class="vazio">nenhum ainda</div>';
+}
+
+async function atualizar() {
+  try {
+    const r = await fetch("/api/estado", {cache: "no-store"});
+    const e = await r.json();
+    ultimoEstado = e;
+    const s = e.sistema || {};
+    if (s.cpu != null) {
+      const nivel = v => v >= 90 ? "alto" : v >= 75 ? "medio" : "ok";
+      $("#uso").innerHTML = `CPU <b class="${nivel(s.cpu)}">${s.cpu}%</b> · RAM <b class="${nivel(s.ram)}">${s.ram}%</b>` +
+        ` <span style="opacity:.8">(${s.ram_livre_gb} GB livres)</span>`;
+    }
+    const bn = $("#badge-novos"), n = e.videos_novos || 0;
+    bn.hidden = !n; bn.textContent = n > 99 ? "99+" : n;
+    $("#pulso").className = "pulso";
+    const up = Math.round(e.agora - e.inicio);
+    const ativos = e.canais.filter(c => c.rodando).length;
+    $("#info").textContent = `${ativos} rodando / ${e.canais.length} canais · há ${Math.floor(up / 60)} min · ${fmtHora(e.agora)}` +
+      (ativos > 3 ? " · ⚠ mais de 3 canais pode pesar no notebook" : "");
+    $("#sem-canais").style.display = e.canais.length ? "none" : "block";
+    const nomes = new Set(e.canais.map(c => c.nome));
+    document.querySelectorAll("#canais > .card").forEach(el => { if (!nomes.has(el.id.slice(6))) el.remove(); });
+    e.canais.forEach(cardCanal);
+    // mantém a ordem da tela igual à salva (só mexe no DOM se mudou e não estiver arrastando)
+    if (!arrastando && !salvandoOrdem) {
+      const atual = [...document.querySelectorAll("#canais > .card")].map(x => x.id.slice(6));
+      const certa = e.canais.map(c => c.nome);
+      if (atual.join("|") !== certa.join("|")) certa.forEach(n => { const x = document.getElementById("canal-" + n); if (x) $("#canais").appendChild(x); });
+    }
+    renderFila(e.fila);
+    renderCortes(e.cortes);
+  } catch (err) {
+    $("#pulso").className = "pulso off";
+    $("#info").textContent = "sem conexão com o main.py";
+  }
+}
+// ---------------------------------------------------------------- abrir no celular (QR code)
+$("#btn-celular").onclick = async () => {
+  const corpo = $("#cel-corpo");
+  $("#cel-fundo").classList.add("aberto");
+  try {
+    const j = await (await fetch("/api/celular")).json();
+    if (j.erro) { corpo.innerHTML = `<p>${esc(j.erro)}</p>`; return; }
+    if (!j.ativo) { corpo.innerHTML = `<p>O acesso pelo celular está desligado (<code>painel.acesso_celular</code> no config.yaml).</p>`; return; }
+    corpo.innerHTML = `<p>1. O celular precisa estar na <b>mesma rede Wi-Fi</b> do notebook.<br>
+      2. Aponte a câmera do celular para o QR code.</p><div id="qr"></div>
+      <p>Ou digite no navegador do celular:</p><div class="link-cel">${esc(j.url)}</div>
+      <p>⚠ Esse link tem uma chave secreta: não compartilhe. Se não abrir, libere o Python no firewall do Windows (redes privadas).</p>`;
+    if (window.QRCode) new QRCode($("#qr"), {text: j.url, width: 200, height: 200});
+    else $("#qr").outerHTML = "<p>(QR indisponível sem internet: use o link)</p>";
+  } catch (e) { corpo.innerHTML = `<p>${esc(e.message)}</p>`; }
+};
+$("#cel-fechar").onclick = () => $("#cel-fundo").classList.remove("aberto");
+$("#cel-fundo").onclick = ev => { if (ev.target.id === "cel-fundo") $("#cel-fundo").classList.remove("aberto"); };
+// no celular não faz sentido mostrar o botão (o link é gerado no notebook)
+if (!["localhost", "127.0.0.1"].includes(location.hostname)) $("#btn-celular").style.display = "none";
+
+atualizar();
+setInterval(atualizar, 2000);
+</script>
+</body>
+</html>

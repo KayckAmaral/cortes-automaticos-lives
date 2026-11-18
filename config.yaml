@@ -1,0 +1,123 @@
+# Configuração do sistema de cortes. Veja PLANO.md (seção 6).
+
+geral:
+  buffer_minutos: 10            # quanto tempo de live fica guardado em disco
+  segmento_seg: 10              # tamanho de cada pedaço gravado
+  qualidade: "720p60,720p,best" # ordem de preferência do streamlink
+  max_fila: 5                   # cortes esperando processamento (descarta os piores)
+  gravacao_travada_seg: 40      # sem dados novos por esse tempo → derruba e reconecta a gravação
+  sobra_edicao_seg: 60          # vídeo extra guardado antes/depois de cada corte para ajustar o tempo depois (0 = desliga)
+  pasta_buffer: "buffer"
+  pasta_cortes: "cortes"
+
+detector:
+  janela_seg: 5
+  base_minutos: 5
+  aquecimento_seg: 60           # tempo mínimo de chat lido antes de poder cortar
+  multiplicador: 3.0            # pico = pontuação >= multiplicador x base
+  minimo_absoluto: 25           # pontuação mínima absoluta na janela
+  min_usuarios_unicos: 15
+  pausa_entre_cortes_seg: 60
+  max_espera_pico_seg: 10       # espera o pico parar de subir
+  limite_sorteio: 0.6           # % de mensagens idênticas que indica sorteio/comando
+  palavras_peso:
+    3: ["KKK", "KEKW", "OMEGALUL", "CLIPA", "CLIP", "MDS", "PQP", "WTF", "CARALHO", "LMAO", "😂", "🤣", "💀"]
+    2: ["LUL", "NOOO", "POG", "???", "SOCORRO", "HAHA", "RSRS", "ICON", "VSF"]
+  # Mensagens de saudação/pedido valem 0 (não são reação a um lance). Letra final pode repetir (SALVEEE, OIII).
+  # Se a mensagem também tiver reação (ex.: "SALVE KKKK"), ela conta normalmente.
+  saudacoes: ["SALVE", "OI", "OLA", "OPA", "EAI", "EAE", "BOA NOITE", "BOA TARDE", "BOM DIA", "MANDA UM SALVE",
+              "MANDA SALVE", "MANDA UM OI", "ME RESPONDE", "LE MEU NOME", "FALA COMIGO", "ME NOTA", "ME VE"]
+  limite_saudacoes: 0.5         # se >= 50% das mensagens do pico forem saudação, o pico é ignorado
+  ignorar_usuarios: ["nightbot", "streamelements", "moobot", "wizebot", "botrix", "kickbot", "fossabot"]
+
+audio:
+  # 2º sinal de pico: grito/risada do streamer (volume que dispara na faixa da voz, 300–3500 Hz)
+  ativo: true
+  limiar_db: 12                 # quanto acima do volume normal conta como grito (maior = menos cortes)
+  confirmacao_chat: 1.5         # o chat precisa reagir pelo menos isso × o normal nos 15 s seguintes
+  espera_chat_seg: 15
+  minimo_db: -38                # ignora picos em áudio muito baixo
+  base_minutos: 5
+
+corte:
+  antes_seg: 25
+  depois_seg: 5
+  max_espera_segmento_seg: 45   # quanto esperar o segmento final fechar
+
+legenda:
+  ativa: true
+  modelo: "small"
+  idioma: "pt"
+  prompt_inicial: "GTA 6, GTA V, Vice City, Los Santos, Jason, Lucia, chat, clipa, mano, véi, KKKK."
+  fonte: "Arial Black"
+  tamanho: 78
+  posicao_y: 0.36               # fração da altura (0.317 = divisa câmera/gameplay)
+  palavras_por_vez: 3
+  cor_destaque: "00FFFF"        # BGR do ASS: 00FFFF = amarelo
+  # Falas do jogo (detectadas pelo idioma: GTA é dublado em inglês/espanhol, streamer fala português):
+  #   desligado = legenda tudo igual (comportamento original)
+  #   silencio  = fala do jogo aparece em estilo diferente (menor, itálico, azul-claro) quando o streamer não fala
+  #   nunca     = só legenda o streamer
+  falas_jogo: "silencio"
+  traduzir_jogo: true           # traduz as falas do jogo para português (offline, modelo em modelos/traducao_en_pb)
+  tempo_max_extra_seg: 10       # orçamento de tempo das checagens de idioma por corte (CPU fraca)
+
+saida:
+  fps: 30
+  encoder: "auto"               # auto | qsv | x264
+  bitrate: "4500k"
+  zoom_so_gameplay: 1.35        # zoom da gameplay no layout so_gameplay
+  credito: true                 # crédito do streamer no vídeo (ex.: "kick.com/coringa"); texto por canal no painel
+
+painel:
+  porta: 8000
+  # abre o painel no celular pela mesma rede Wi-Fi (protegido por chave secreta; QR no botão 📱 Celular).
+  # Na 1ª vez o Windows pergunta se libera o Python no firewall: marque "Redes privadas" e permita.
+  acesso_celular: true
+
+discord:
+  webhook_url: ""               # cole aqui a URL do webhook (opcional)
+
+# ATENÇÃO: depois da 1ª vez que o painel salvar algo, a lista de canais passa a viver em
+# canais.yaml (gerenciado pelo painel). A lista abaixo só serve como ponto de partida.
+canais:
+  # ---- TESTE ----
+  - nome: "dona"
+    plataforma: "kick"
+    url: "https://kick.com/dona"
+    ativo: true
+    chatroom_id: null           # número da sala de chat da Kick (ver PLANO.md seção 8, item 2b)
+    offset_seg: 0
+    layout: "camera_gameplay"
+    camera: {x: 0.0, y: 0.0, w: 0.283, h: 0.285}   # calibrado em 17/11 (webcam no canto sup. esquerdo)
+    gameplay_offset_x: 0.55     # desloca um pouco à direita para não pegar a webcam
+
+  # ---- GTA 6 ----
+  - nome: "coringa"
+    plataforma: "kick"
+    url: "https://kick.com/coringa"
+    ativo: false
+    chatroom_id: null
+    offset_seg: 0
+    layout: "so_gameplay"
+    camera: null
+    gameplay_offset_x: 0.5
+
+  - nome: "gabepeixe"
+    plataforma: "kick"
+    url: "https://kick.com/gabepeixe"
+    ativo: false
+    chatroom_id: null
+    offset_seg: 0
+    layout: "so_gameplay"
+    camera: null
+    gameplay_offset_x: 0.5
+
+  - nome: "yuri22"
+    plataforma: "youtube"
+    url: "https://www.youtube.com/@yuri22ofc/live"
+    ativo: false
+    offset_seg: 0
+    layout: "so_gameplay"
+    camera: null
+    gameplay_offset_x: 0.5

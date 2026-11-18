@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vídeos</title>
+<style>
+  :root {
+    --bg: #0e1014; --card: #171a21; --card2: #1e222b; --borda: #2a2f3a;
+    --txt: #e8eaf0; --sub: #8b93a5; --verde: #3ecf8e; --vermelho: #ff5c6c;
+    --amarelo: #ffd166; --azul: #5aa9ff;
+    --topo: 112px;   /* altura do cabeçalho + filtros */
+  }
+  * { box-sizing: border-box; }
+  html { scroll-snap-type: y mandatory; scroll-padding-top: var(--topo); }
+  body { margin: 0; background: var(--bg); color: var(--txt); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
+  .fixo { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--borda); }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 20px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  nav a { color: var(--sub); text-decoration: none; margin-right: 14px; font-weight: 600; }
+  nav a.atual { color: var(--txt); border-bottom: 2px solid var(--azul); padding-bottom: 2px; }
+  nav a:hover { color: var(--txt); }
+  .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 2px; border-radius: 99px;
+           background: var(--amarelo); color: #1a1405; font-size: 11px; font-weight: 800; line-height: 17px;
+           text-align: center; vertical-align: top; }
+  .badge[hidden] { display: none; }
+  header .dir { margin-left: auto; display: flex; gap: 10px; align-items: center; color: var(--sub); font-size: 13px; }
+  .som { background: var(--card2); color: var(--txt); border: 1px solid var(--borda); border-radius: 99px;
+         padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+  .som.ligado { border-color: var(--verde); color: var(--verde); }
+  /* barra lateral com os filtros */
+  :root { --lateral: 210px; }
+  .lateral { position: fixed; left: 0; top: var(--topo); bottom: 0; width: var(--lateral); z-index: 4;
+             border-right: 1px solid var(--borda); background: var(--bg); padding: 14px 12px; overflow-y: auto;
+             display: flex; flex-direction: column; gap: 6px; }
+  .lateral h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--sub); margin: 0 0 4px 4px; }
+  .chip { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: left;
+          background: transparent; color: var(--txt); border: 1px solid transparent; border-radius: 8px;
+          padding: 8px 10px; font: inherit; font-weight: 600; cursor: pointer; }
+  .chip:hover { background: var(--card2); }
+  .chip span { color: var(--sub); font-weight: 400; background: var(--card2); border-radius: 99px; padding: 0 8px; font-size: 12px; }
+  .chip.ativo { background: var(--azul); color: #06121f; }
+  .chip.ativo span { color: #06121f; background: rgba(255,255,255,.35); }
+  .lateral .sep { border-top: 1px solid var(--borda); margin: 10px 0 6px; }
+  .apagar-todos { width: 100%; background: transparent; color: var(--vermelho); border: 1px solid var(--borda);
+                  border-radius: 8px; padding: 8px 10px; font: inherit; font-weight: 600; cursor: pointer; }
+  .apagar-todos:hover { background: rgba(255, 92, 108, .1); border-color: var(--vermelho); }
+  .ordem-info { color: var(--sub); font-size: 11px; line-height: 1.5; margin-top: auto; padding: 8px 4px 0; }
+  /* feed vertical: um corte por tela */
+  .feed { display: flex; flex-direction: column; align-items: center; margin-left: var(--lateral); }
+  .corte { scroll-snap-align: start; scroll-snap-stop: always; min-height: calc(100vh - var(--topo));
+           display: flex; gap: 20px; align-items: center; justify-content: center; padding: 14px 20px;
+           width: 100%; max-width: 980px; transition: opacity .3s, transform .3s; }
+  .corte.saindo { opacity: 0; transform: scale(.95); }
+  .corte video { height: calc(100vh - var(--topo) - 28px); max-height: 900px; aspect-ratio: 9 / 16;
+                 max-width: 100%; background: #000; border-radius: 12px; display: block; flex-shrink: 0; }
+  /* informações com rolagem própria: os botões nunca ficam cortados */
+  .info { width: 340px; flex-shrink: 1; display: flex; flex-direction: column; gap: 8px;
+          max-height: calc(100vh - var(--topo) - 28px); overflow-y: auto; padding-right: 4px; }
+  .pos { color: var(--sub); font-size: 12px; font-weight: 600; letter-spacing: .05em; }
+  .linha1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .linha1 .canal { font-weight: 700; font-size: 20px; }
+  .captura { font-size: 15px; }
+  .visto { font-size: 12px; font-weight: 700; margin-left: 6px; padding: 2px 8px; border-radius: 99px; cursor: pointer;
+           border: 1px solid var(--borda); white-space: nowrap; user-select: none; }
+  .visto.nao { color: var(--amarelo); border-color: rgba(255, 209, 102, .5); }
+  .visto.sim { color: var(--sub); }
+  .visto:hover { background: var(--card2); }
+  .chip.tem-novos:not(.ativo) span { background: var(--amarelo); color: #1a1405; font-weight: 700; }
+  .chip.tem-postar:not(.ativo) span { background: var(--verde); color: #04170e; font-weight: 700; }
+  .btn.postar { flex: none; width: 100%; background: transparent; color: var(--verde); border-color: rgba(62, 207, 142, .5); }
+  .btn.postar:hover { background: rgba(62, 207, 142, .1); }
+  .btn.postar.sim { background: var(--verde); color: #04170e; border-color: var(--verde); }
+  .captura b { color: var(--azul); }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--card2); color: var(--sub); border: 1px solid var(--borda); }
+  .tag.forte { color: var(--amarelo); } .tag.manual { color: var(--azul); } .tag.audio { color: #d6a4ff; }
+  .tag.mudo { color: var(--vermelho); border-color: rgba(255, 92, 108, .5); }
+  .titulo { font-weight: 600; font-size: 15px; }
+  .meta { font-size: 12px; color: var(--sub); }
+  .transc { font-size: 13px; color: var(--sub); font-style: italic; max-height: 6em; overflow-y: auto; flex-shrink: 0; }
+  .graf-corte canvas { width: 100%; height: 110px; display: block; border-radius: 8px; }
+  .graf-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--sub); margin-top: 4px; }
+  .graf-leg .q { display: inline-block; width: 12px; height: 9px; margin-right: 4px; vertical-align: middle; border-radius: 2px; }
+  .graf-leg .q.trecho { background: rgba(90,169,255,.35); border: 1px solid var(--azul); }
+  .graf-leg .q.pico { background: var(--amarelo); width: 3px; }
+  .graf-leg .q.agora { background: #fff; width: 2px; }
+  .graf-leg .q.chat { background: #7fbfff; height: 2px; }
+  .graf-leg .q.lim { border-top: 2px dashed var(--vermelho); height: 0; }
+  .jogo { font-size: 12px; background: var(--card2); border-radius: 8px; padding: 8px 10px; }
+  .jogo b { display: block; color: #a0e0ff; margin-bottom: 4px; }
+  .jogo div { padding: 3px 0; border-top: 1px dashed var(--borda); }
+  .jogo .pt { display: block; color: var(--txt); font-style: italic; }
+  .jogo .en { display: block; color: var(--sub); font-size: 11px; }
+  .acoes { display: flex; gap: 8px; margin-top: 6px; }
+  .btn { flex: 1; text-align: center; border-radius: 7px; padding: 9px 10px; font: inherit; font-weight: 600;
+         cursor: pointer; text-decoration: none; border: 1px solid var(--borda); }
+  .btn.baixar { background: var(--card2); color: var(--txt); }
+  .btn.apagar { background: transparent; color: var(--vermelho); }
+  .btn.apagar:hover { background: rgba(255, 92, 108, .1); }
+  .dica { color: var(--sub); font-size: 11px; }
+  @media (max-width: 760px) {
+    /* no celular o vídeo + informações são mais altos que a tela: o "encaixe" estilo Reels puxava
+       a página de volta para o topo do vídeo e não deixava chegar no botão Baixar → rolagem livre */
+    html { scroll-snap-type: none; }
+    .corte { scroll-snap-align: none; scroll-snap-stop: normal; min-height: auto; padding-bottom: 28px;
+             border-bottom: 1px solid var(--borda); }
+    .corte { flex-direction: column; gap: 10px; }
+    .corte video { height: auto; width: 100%; max-height: calc(100vh - var(--topo) - 190px); }
+    .info { width: 100%; max-height: none; overflow: visible; }
+    /* no celular a barra lateral vira uma faixa no topo */
+    .lateral { position: sticky; top: var(--topo); width: auto; flex-direction: row; flex-wrap: wrap;
+               border-right: 0; border-bottom: 1px solid var(--borda); padding: 8px; bottom: auto; }
+    .lateral h2, .lateral .sep, .ordem-info { display: none; }
+    .chip, .apagar-todos { width: auto; }
+    .feed { margin-left: 0; }
+  }
+  .vazio { color: var(--sub); padding: 60px 20px; text-align: center; }
+  .novos { position: fixed; top: calc(var(--topo) + 10px); left: calc(50% + var(--lateral) / 2); transform: translateX(-50%); z-index: 6;
+           background: var(--azul); color: #06121f; border: 0; border-radius: 99px; padding: 8px 18px;
+           font: inherit; font-weight: 700; cursor: pointer; display: none; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  /* modal */
+  .fundo { position: fixed; inset: 0; background: rgba(0, 0, 0, .65); display: none; align-items: center;
+           justify-content: center; z-index: 20; padding: 16px; }
+  .fundo.aberto { display: flex; }
+  .modal { background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 20px;
+           max-width: 440px; width: 100%; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+  .modal h3 { margin: 0 0 8px; font-size: 17px; }
+  .modal p { margin: 6px 0; color: var(--sub); }
+  .modal ul { margin: 8px 0 14px; padding-left: 18px; color: var(--sub); font-size: 13px; }
+  .modal .botoes { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  .modal button { border-radius: 7px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--borda); }
+  .modal .cancelar { background: var(--card2); color: var(--txt); }
+  .modal .confirmar { background: var(--vermelho); color: #fff; border-color: var(--vermelho); }
+  .modal .erro { color: var(--vermelho); font-size: 13px; }
+  .acoes-edicao { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn.editar { background: var(--azul); color: #06121f; border-color: var(--azul); }
+  .btn.editar:disabled { background: var(--card2); color: var(--sub); border-color: var(--borda); cursor: default; }
+  .btn.reverter { background: transparent; color: var(--amarelo); }
+  .estado-edicao { color: var(--amarelo); font-weight: 600; padding: 8px 0; }
+  .modal .salvar { background: var(--azul); color: #06121f; border-color: var(--azul); }
+  .modal button:disabled { opacity: .5; cursor: default; }
+  .modal.editor { max-width: 900px; }
+  .editor video { width: 100%; max-height: 46vh; background: #000; border-radius: 8px; display: block; }
+  .trilho { position: relative; height: 46px; margin-top: 12px; background: var(--card2); border-radius: 6px;
+            cursor: pointer; touch-action: none; user-select: none; }
+  .faixa-atual { position: absolute; top: 4px; bottom: 4px; border: 2px dashed var(--sub); border-radius: 4px; pointer-events: none; }
+  .selecao { position: absolute; top: 0; bottom: 0; background: rgba(90, 169, 255, .28); border: 2px solid var(--azul);
+             border-radius: 6px; }
+  .alca-t { position: absolute; top: -2px; bottom: -2px; width: 14px; background: var(--azul); cursor: ew-resize; border-radius: 4px; }
+  .alca-t.ini { left: -8px; } .alca-t.fim { right: -8px; }
+  .alca-t::after { content: ""; position: absolute; left: 5px; top: 14px; bottom: 14px; width: 4px;
+                   border-left: 1px solid #06121f; border-right: 1px solid #06121f; }
+  .marca-pico { position: absolute; top: -4px; bottom: -4px; width: 3px; background: var(--amarelo); pointer-events: none; }
+  .cabeca { position: absolute; top: -6px; bottom: -6px; width: 2px; background: #fff; pointer-events: none; }
+  .escala-t { display: flex; justify-content: space-between; font-size: 11px; color: var(--sub); margin-top: 4px; }
+  .leitura { margin-top: 8px; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .leitura b { color: var(--azul); }
+  .finos { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; color: var(--sub); align-items: center; }
+  .finos button { background: var(--card2); color: var(--txt); border: 1px solid var(--borda); border-radius: 5px;
+                  padding: 3px 8px; margin-left: 4px; font: inherit; font-size: 12px; cursor: pointer; }
+  .legenda-t { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--sub); margin-top: 10px; }
+  .legenda-t .q { display: inline-block; width: 14px; height: 10px; margin-right: 5px; vertical-align: middle; border-radius: 2px; }
+  .legenda-t .q.sel { background: rgba(90, 169, 255, .5); border: 1px solid var(--azul); }
+  .legenda-t .q.atual { border: 2px dashed var(--sub); }
+  .legenda-t .q.pico { background: var(--amarelo); width: 4px; }
+  .nota { font-size: 12px; }
+  #aviso { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--card2);
+           border: 1px solid var(--borda); padding: 10px 16px; border-radius: 8px; display: none; z-index: 30; }
+</style>
+</head>
+<body>
+<div class="fixo" id="fixo">
+  <header>
+    <h1>Vídeos</h1>
+    <nav><a href="/">Painel ao vivo</a><a href="/videos" class="atual" title="vídeos novos (ainda não assistidos)">🎬 Vídeos <span class="badge" id="badge-novos" hidden></span></a></nav>
+    <div class="dir">
+      <span id="info">carregando…</span>
+      <button class="som" id="som">🔇 Som desligado</button>
+    </div>
+  </header>
+</div>
+<aside class="lateral" id="filtros"></aside>
+<button class="novos" id="novos"></button>
+<div class="feed" id="feed"></div>
+
+<div class="fundo" id="fundo">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-titulo">
+    <h3 id="m-titulo">Apagar este corte?</h3>
+    <p id="m-desc"></p>
+    <p>Serão apagados permanentemente:</p>
+    <ul>
+      <li>o vídeo final (<code>.mp4</code>)</li>
+      <li>os dados do corte (<code>.json</code>: transcrição, pontuação, mensagens)</li>
+      <li>os arquivos temporários desse corte, se sobraram</li>
+    </ul>
+    <p style="font-size:12px">Os pedaços da gravação ao vivo somem sozinhos em 10 min.</p>
+    <div class="erro" id="m-erro"></div>
+    <div class="botoes">
+      <button class="cancelar" id="m-cancelar">Cancelar</button>
+      <button class="confirmar" id="m-confirmar">🗑 Apagar</button>
+    </div>
+  </div>
+</div>
+<!-- editor de tempo -->
+<div class="fundo" id="ed-fundo">
+  <div class="modal editor" role="dialog" aria-modal="true" aria-labelledby="ed-titulo">
+    <h3 id="ed-titulo">✂ Ajustar tempo do corte</h3>
+    <p id="ed-desc" style="margin-top:0"></p>
+    <video id="ed-video" controls playsinline preload="auto"></video>
+    <div class="trilho" id="ed-trilho" title="clique para ir até esse ponto">
+      <div class="faixa-atual" id="ed-atual"></div>
+      <div class="selecao" id="ed-sel"><span class="alca-t ini" id="ed-h-ini"></span><span class="alca-t fim" id="ed-h-fim"></span></div>
+      <div class="marca-pico" id="ed-pico" title="momento do pico do chat"></div>
+      <div class="cabeca" id="ed-cabeca"></div>
+    </div>
+    <div class="escala-t" id="ed-escala"></div>
+    <div class="leitura" id="ed-leitura"></div>
+    <div class="finos">
+      <span>Início <button data-f="ini:-5">−5s</button><button data-f="ini:-1">−1s</button><button data-f="ini:1">+1s</button><button data-f="ini:5">+5s</button></span>
+      <span>Fim <button data-f="fim:-5">−5s</button><button data-f="fim:-1">−1s</button><button data-f="fim:1">+1s</button><button data-f="fim:5">+5s</button></span>
+    </div>
+    <div class="legenda-t">
+      <span><i class="q sel"></i>novo trecho (arraste as bordas)</span>
+      <span><i class="q atual"></i>trecho atual</span>
+      <span><i class="q pico"></i>pico do chat</span>
+    </div>
+    <p class="nota">O corte refeito <b>substitui</b> o atual (com legenda nova). Você pode <b>reverter ao original</b> depois.
+      Leva uns 30–40 s e só começa depois dos cortes novos da fila.</p>
+    <div class="erro" id="ed-erro"></div>
+    <div class="botoes">
+      <button class="cancelar" id="ed-reset">↺ Voltar ao trecho atual</button>
+      <button class="cancelar" id="ed-assistir">▶ Assistir trecho</button>
+      <button class="cancelar" id="ed-cancelar">Cancelar</button>
+      <button class="salvar" id="ed-salvar">💾 Refazer corte</button>
+    </div>
+  </div>
+</div>
+
+<!-- confirmação de apagar todos do streamer -->
+<div class="fundo" id="at-fundo">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3 id="at-titulo">Apagar todos os cortes?</h3>
+    <p id="at-desc"></p>
+    <p>Para cada corte serão apagados permanentemente: o vídeo, os dados (<code>.json</code>), o vídeo extra para ajuste
+      e o original guardado (se houver). <b>Não dá para desfazer.</b></p>
+    <p style="font-size:12px">Cortes que estiverem sendo ajustados agora serão pulados.</p>
+    <div class="erro" id="at-erro"></div>
+    <div class="botoes">
+      <button class="cancelar" id="at-cancelar">Cancelar</button>
+      <button class="confirmar" id="at-confirmar">🗑 Apagar todos</button>
+    </div>
+  </div>
+</div>
+
+<!-- confirmação de reverter -->
+<div class="fundo" id="rv-fundo">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3>Reverter ao corte original?</h3>
+    <p id="rv-desc"></p>
+    <p>O vídeo volta a ser o corte automático original (tempo e legenda de antes). O ajuste atual será descartado.</p>
+    <div class="erro" id="rv-erro"></div>
+    <div class="botoes">
+      <button class="cancelar" id="rv-cancelar">Cancelar</button>
+      <button class="salvar" id="rv-confirmar">↩ Reverter</button>
+    </div>
+  </div>
+</div>
+<div id="aviso"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let cortes = [];          // lista exibida (já ordenada: mais recente primeiro)
+let pendentes = null;     // lista nova que chegou enquanto o usuário estava no meio do feed
+let filtro = decodeURIComponent(location.hash.slice(1)) || "todos";
+let comSom = false;
+try { comSom = localStorage.getItem("galeria_som") === "1"; } catch (e) {}
+
+const ordenar = lista => lista.slice().sort((a, b) => b.inicio - a.inicio);   // horário de captura, mais recente no topo
+
+function aviso(txt) {
+  const a = $("#aviso"); a.textContent = txt; a.style.display = "block";
+  clearTimeout(a._t); a._t = setTimeout(() => a.style.display = "none", 3500);
+}
+
+// ---------------------------------------------------------------- som
+function aplicarSom() {
+  const b = $("#som");
+  b.textContent = comSom ? "🔊 Som ligado" : "🔇 Som desligado";
+  b.classList.toggle("ligado", comSom);
+  document.querySelectorAll("#feed video").forEach(v => v.muted = !comSom);
+}
+$("#som").onclick = () => {
+  comSom = !comSom;
+  try { localStorage.setItem("galeria_som", comSom ? "1" : "0"); } catch (e) {}
+  aplicarSom();
+  const v = videoAtual(); if (v) v.play().catch(() => {});
+};
+
+// ---------------------------------------------------------------- autoplay do vídeo visível
+const observador = new IntersectionObserver(entradas => {
+  for (const e of entradas) {
+    const v = e.target;
+    if (e.isIntersecting && e.intersectionRatio >= 0.6) {
+      v.muted = !comSom;
+      v.play().catch(() => { v.muted = true; comSom = false; aplicarSom(); v.play().catch(() => {}); });
+      atualizarPosicao(v.closest(".corte"));
+    } else {
+      v.pause();
+    }
+  }
+}, {threshold: [0, 0.6]});
+
+function videoAtual() {
+  let melhor = null, area = 0;
+  document.querySelectorAll("#feed .corte").forEach(el => {
+    const r = el.getBoundingClientRect();
+    const vis = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+    if (vis > area) { area = vis; melhor = el; }
+  });
+  return melhor && melhor.querySelector("video");
+}
+
+function atualizarPosicao(el) {
+  const todos = [...document.querySelectorAll("#feed .corte")];
+  const i = todos.indexOf(el);
+  if (i >= 0) $("#info").textContent = `${i + 1} de ${todos.length} cortes`;
+}
+
+// teclado: ↑/↓ (ou K/J) navega entre os cortes, espaço pausa
+document.addEventListener("keydown", ev => {
+  if ($("#fundo").classList.contains("aberto")) { if (ev.key === "Escape") fecharModal(); return; }
+  if ($("#ed-fundo").classList.contains("aberto")) { if (ev.key === "Escape") fecharEditor(); return; }
+  if ($("#rv-fundo").classList.contains("aberto")) { if (ev.key === "Escape") fecharRev(); return; }
+  if ($("#at-fundo").classList.contains("aberto")) { if (ev.key === "Escape") fecharApagarTodos(); return; }
+  const todos = [...document.querySelectorAll("#feed .corte")];
+  const atual = videoAtual(); const i = atual ? todos.indexOf(atual.closest(".corte")) : -1;
+  if (["ArrowDown", "j", "J"].includes(ev.key) && i < todos.length - 1) { ev.preventDefault(); todos[i + 1].scrollIntoView({behavior: "smooth"}); }
+  if (["ArrowUp", "k", "K"].includes(ev.key) && i > 0) { ev.preventDefault(); todos[i - 1].scrollIntoView({behavior: "smooth"}); }
+  if (ev.key === " " && atual && ev.target === document.body) { ev.preventDefault(); atual.paused ? atual.play() : atual.pause(); }
+});
+
+// ---------------------------------------------------------------- filtros
+function renderFiltros() {
+  const cont = {};
+  cortes.forEach(c => cont[c.canal] = (cont[c.canal] || 0) + 1);
+  const canais = Object.keys(cont).sort();
+  if (!["todos", "novos", "postar"].includes(filtro) && !cont[filtro]) filtro = "todos";
+  const novos = cortes.filter(c => !c.assistido).length;
+  const paraPostar = cortes.filter(c => c.postar).length;
+  const bn = $("#badge-novos"); bn.hidden = !novos; bn.textContent = novos > 99 ? "99+" : novos;
+  const nomeBonito = c => c.charAt(0).toUpperCase() + c.slice(1);
+  const chip = (id, rot, n, extra = "") => `<button class="chip ${extra} ${filtro === id ? "ativo" : ""}" data-f="${esc(id)}">${esc(rot)}<span>${n}</span></button>`;
+  const ehStreamer = !["todos", "novos", "postar"].includes(filtro);
+  $("#filtros").innerHTML = chip("novos", "● Novos", novos, novos ? "tem-novos" : "") +
+    chip("postar", "⭐ Postar", paraPostar, paraPostar ? "tem-postar" : "") +
+    `<h2>Streamers</h2>` + chip("todos", "Todos", cortes.length) +
+    canais.map(c => chip(c, nomeBonito(c), cont[c])).join("") +
+    (ehStreamer ? `<div class="sep"></div>
+      <button class="apagar-todos" id="apagar-todos">🗑 Apagar todos de ${esc(nomeBonito(filtro))} (${cont[filtro]})</button>` : "") +
+    `<div class="ordem-info">Mais recente no topo<br>↑ ↓ navega · espaço pausa</div>`;
+  document.querySelectorAll(".chip").forEach(b => b.onclick = () => {
+    filtro = b.dataset.f;
+    mantidosNoFiltro.clear();   // ao (re)entrar num filtro, quem já saiu dele some da lista
+    history.replaceState(null, "", filtro === "todos" ? "/videos" : "/videos#" + encodeURIComponent(filtro));
+    renderFiltros(); renderFeed(); scrollTo({top: 0});
+  });
+  const at = $("#apagar-todos");
+  if (at) at.onclick = abrirApagarTodos;
+}
+
+// ---------------------------------------------------------------- feed
+function cardHTML(c) {
+  const forte = !c.manual && c.relativo >= 4;
+  return `<section class="corte" data-id="${esc(c.id)}">
+    <video src="${esc(c.url)}" controls preload="metadata" playsinline loop></video>
+    <div class="info">
+      <div class="pos" data-pos></div>
+      <div class="linha1">
+        <span class="canal">${esc(c.canal)}</span>
+        ${c.manual ? '<span class="tag manual">manual</span>' : `<span class="tag ${forte ? "forte" : ""}">${c.relativo}x o normal</span>`}
+        ${c.gatilho === "audio" ? '<span class="tag audio" title="o streamer gritou/riu alto e o chat reagiu">🔊 grito/risada</span>' : ""}
+        ${c.mudo_inicio >= 3 ? `<span class="tag mudo" title="a própria live estava sem som (ex.: o streamer cortou o áudio). Use ✂ Ajustar tempo para começar depois">⚠ live sem som no início (${Math.round(c.mudo_inicio)}s)</span>` : ""}
+      </div>
+      <div class="captura">Capturado em <b>${esc(c.data_txt)}</b> <span class="visto" data-visto role="button" tabindex="0"></span></div>
+      <div class="graf-corte">
+        <canvas data-graf width="340" height="110"></canvas>
+        <div class="graf-leg"><span><i class="q trecho"></i>trecho do corte</span><span><i class="q pico"></i>pico</span>
+          <span><i class="q agora"></i>vídeo agora</span><span><i class="q chat"></i>reação do chat</span><span><i class="q lim"></i>limite</span></div>
+      </div>
+      ${c.titulo ? `<div class="titulo">${esc(c.titulo)}</div>` : ""}
+      ${c.transcricao ? `<div class="transc">“${esc(c.transcricao)}”</div>` : ""}
+      ${(c.falas_jogo || []).length ? `<div class="jogo"><b>🎮 Falas do jogo (legenda traduzida)</b>${c.falas_jogo.map(f =>
+          `<div><span class="pt">${esc(f.traducao)}</span><span class="en">${esc(f.original)}</span></div>`).join("")}</div>` : ""}
+      ${c.top_msgs.length ? `<div class="meta">chat: ${c.top_msgs.slice(0, 3).map(([t, n]) => esc(t.slice(0, 25)) + " ×" + n).join(" · ")}</div>` : ""}
+      <div class="meta">${c.duracao ? c.duracao + " s · " : ""}${c.tamanho_mb} MB${c.pronto_em_seg ? " · pronto " + c.pronto_em_seg + " s após o pico" : ""}</div>
+      <button class="btn postar" data-postar></button>
+      <div class="acoes-edicao" data-acoes-edicao></div>
+      <div class="acoes">
+        <a class="btn baixar" href="${esc(c.url)}" download>⬇ Baixar</a>
+        <button class="btn apagar" data-apagar="${esc(c.id)}">🗑 Apagar</button>
+      </div>    </div>
+  </section>`;
+}
+
+// ---------------------------------------------------------------- gráfico do chat em volta do corte
+function desenharGraficoCorte(el) {
+  const c = el._c, cv = el.querySelector("[data-graf]");
+  if (!c || !cv) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 340, h = cv.clientHeight || 110;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const css = getComputedStyle(document.documentElement), cor = n => css.getPropertyValue(n).trim();
+  ctx.fillStyle = cor("--card2"); ctx.fillRect(0, 0, w, h);
+  const g = c.grafico || [];
+  ctx.font = "11px Segoe UI"; ctx.fillStyle = cor("--sub");
+  if (g.length < 5) {
+    ctx.fillText(c.pico ? "sem dados do chat (corte feito antes desta função)" : "corte manual sem dados do chat", 10, h / 2 + 4);
+    return;
+  }
+  const t0 = g[0][0], t1 = g[g.length - 1][0];
+  const base = 16, topo = 6;                              // espaço para os rótulos embaixo
+  const maxY = Math.max(5, ...g.map(p => Math.max(p[1], p[2]))) * 1.12;
+  const X = t => (t - t0) / (t1 - t0) * w, Y = v => h - base - v / maxY * (h - base - topo);
+  // trecho do corte
+  const ci = c.inicio_corte, cf = ci + (c.duracao_exata || c.duracao);
+  ctx.fillStyle = "rgba(90,169,255,.22)"; ctx.fillRect(X(ci), topo - 4, X(cf) - X(ci), h - base - topo + 4);
+  ctx.strokeStyle = cor("--azul"); ctx.lineWidth = 1.5; ctx.strokeRect(X(ci), topo - 4, X(cf) - X(ci), h - base - topo + 4);
+  // limite e reação do chat
+  const linha = (i, c2, lw, tracejado) => {
+    ctx.beginPath(); ctx.strokeStyle = c2; ctx.lineWidth = lw; ctx.setLineDash(tracejado ? [4, 3] : []);
+    g.forEach((p, k) => k ? ctx.lineTo(X(p[0]), Y(p[i])) : ctx.moveTo(X(p[0]), Y(p[i])));
+    ctx.stroke(); ctx.setLineDash([]);
+  };
+  linha(2, cor("--vermelho"), 1.2, true);
+  linha(1, "#7fbfff", 1.8, false);
+  // pico
+  if (c.pico && c.pico >= t0 && c.pico <= t1) {
+    ctx.fillStyle = cor("--amarelo"); ctx.fillRect(X(c.pico) - 1, topo - 4, 2.5, h - base - topo + 4);
+  }
+  // posição atual do vídeo
+  const v = el.querySelector("video");
+  if (v && v.currentTime > 0) {
+    const ta = ci + v.currentTime;
+    ctx.fillStyle = "#fff"; ctx.fillRect(X(ta) - 1, topo - 6, 2, h - base - topo + 8);
+  }
+  // rótulos (segundos em relação ao pico)
+  const ref = c.pico || ci;
+  ctx.fillStyle = cor("--sub");
+  const rot = t => { const d = Math.round(t - ref); return d === 0 ? "pico" : (d > 0 ? "+" : "") + d + "s"; };
+  ctx.textAlign = "left"; ctx.fillText(rot(t0), 2, h - 3);
+  ctx.textAlign = "right"; ctx.fillText(rot(t1), w - 2, h - 3);
+  if (c.pico) { ctx.textAlign = "center"; ctx.fillStyle = cor("--amarelo"); ctx.fillText("pico", Math.min(w - 16, Math.max(16, X(c.pico))), h - 3); }
+  ctx.textAlign = "start";
+}
+
+// botões de edição atualizados no lugar (sem recriar o player de quem está assistindo)
+function acoesEdicaoHTML(c) {
+  if (c.editando) return `<div class="estado-edicao">⏳ refazendo o corte com o novo tempo…</div>`;
+  let h = "";
+  if (c.fonte) h += `<button class="btn editar" data-editar="${esc(c.id)}">✂ Ajustar tempo</button>`;
+  else if (c.sobra_pronta_em && c.sobra_pronta_em * 1000 > Date.now())
+    h += `<button class="btn editar" disabled data-contagem="${c.sobra_pronta_em}">✂ Ajustar tempo (disponível em …)</button>`;
+  else h += `<button class="btn editar" disabled title="cortes feitos antes desta função não têm vídeo extra guardado">✂ Ajuste indisponível (corte antigo)</button>`;
+  if (c.pode_reverter) h += `<button class="btn reverter" data-reverter="${esc(c.id)}">↩ Reverter ao original</button>`;
+  return h;
+}
+function atualizarContagens() {
+  document.querySelectorAll("[data-contagem]").forEach(b => {
+    const s = Math.max(0, Math.round(Number(b.dataset.contagem) - Date.now() / 1000));
+    b.textContent = s > 0 ? `✂ Ajustar tempo (disponível em ${s}s)` : "✂ Ajustar tempo (preparando…)";
+  });
+}
+setInterval(atualizarContagens, 1000);
+
+// ---------------------------------------------------------------- marcações: assistido / postar
+const marcadosAgora = new Map();     // "id|campo" → valor marcado nesta página (até o servidor confirmar)
+// itens que saíram do filtro enquanto ele estava aberto continuam na tela até trocar de filtro
+// (ex.: terminou de assistir dentro de "Novos", ou tirou da lista dentro de "Postar")
+const mantidosNoFiltro = new Set();
+
+function atualizarMarcacoes(el) {
+  const c = el._c;
+  const s = el.querySelector("[data-visto]"), ok = c && c.assistido;
+  s.textContent = ok ? "✓ Assistido" : "● Novo";
+  s.className = "visto " + (ok ? "sim" : "nao");
+  s.title = ok ? "clique para marcar como NÃO assistido" : "clique para marcar como assistido";
+  const p = el.querySelector("[data-postar]"), sel = c && c.postar;
+  p.textContent = sel ? "★ Na lista para postar" : "⭐ Postar";
+  p.className = "btn postar " + (sel ? "sim" : "");
+  p.title = sel ? "clique para tirar da lista Postar" : "gostei: colocar na lista Postar";
+}
+
+async function marcarCampo(el, campo, valor) {
+  const c = el._c;
+  if (!c || c[campo] === valor) return;
+  c[campo] = valor;
+  marcadosAgora.set(c.id + "|" + campo, valor);
+  if ((campo === "assistido" && valor && filtro === "novos") || (campo === "postar" && !valor && filtro === "postar"))
+    mantidosNoFiltro.add(c.id);
+  const orig = cortes.find(x => x.id === c.id); if (orig) orig[campo] = valor;
+  atualizarMarcacoes(el);
+  renderFiltros();
+  if (campo === "postar") aviso(valor ? "⭐ Adicionado à lista Postar" : "Removido da lista Postar");
+  try {
+    const r = await fetch("/api/marcar", {method: "POST", headers: {"Content-Type": "application/json"},
+                                          body: JSON.stringify({id: c.id, campo, valor})});
+    if (!r.ok) throw new Error((await r.json()).erro);
+  } catch (e) { aviso("Não consegui salvar: " + e.message); }
+  setTimeout(() => marcadosAgora.delete(c.id + "|" + campo), 15000);
+}
+const marcarVisto = (el, valor) => marcarCampo(el, "assistido", valor);
+
+// valor da marcação considerando um clique recente que o servidor ainda não refletiu
+const valorMarcado = (c, campo) => marcadosAgora.has(c.id + "|" + campo) ? marcadosAgora.get(c.id + "|" + campo) : c[campo];
+
+function renderFeed() {
+  // cortes já está ordenado (mais recente no topo)
+  const lista = cortes.filter(c => filtro === "todos" ? true
+    : filtro === "novos" ? (!c.assistido || mantidosNoFiltro.has(c.id))
+    : filtro === "postar" ? (c.postar || mantidosNoFiltro.has(c.id))
+    : c.canal === filtro);
+  const existentes = {};
+  // a chave inclui a versão do vídeo: se o corte foi refeito/revertido, o player é recriado
+  document.querySelectorAll("#feed .corte").forEach(el => existentes[el.dataset.chave] = el);
+  const feed = $("#feed");
+  const frag = document.createDocumentFragment();
+  for (const c of lista) {
+    const chave = c.id + "@" + c.versao;
+    let el = existentes[chave];
+    if (!el) {
+      const t = document.createElement("template"); t.innerHTML = cardHTML(c).trim(); el = t.content.firstChild;
+      el.dataset.chave = chave;
+      const v = el.querySelector("video"); v.muted = !comSom; observador.observe(v);
+      v.addEventListener("timeupdate", () => {
+        desenharGraficoCorte(el);
+        // chegou ao fim (o vídeo fica em loop, então "ended" não dispara) → assistido
+        if (el._c && !el._c.assistido && v.duration && v.currentTime >= v.duration - 1.2) marcarVisto(el, true);
+      });
+      v.addEventListener("seeked", () => desenharGraficoCorte(el));
+    }
+    // dados atuais do corte no elemento (o gráfico pode ser completado depois, quando a sobra é guardada)
+    const graficoMudou = !el._c || (el._c.grafico || []).length !== (c.grafico || []).length;
+    c.assistido = valorMarcado(c, "assistido"); c.postar = valorMarcado(c, "postar");
+    el._c = c;
+    atualizarMarcacoes(el);
+    if (graficoMudou) desenharGraficoCorte(el);
+    const acoes = el.querySelector("[data-acoes-edicao]"), novo = acoesEdicaoHTML(c);
+    if (acoes.dataset.html !== novo) { acoes.innerHTML = novo; acoes.dataset.html = novo; }
+    delete existentes[chave];
+    frag.appendChild(el);
+  }
+  Object.values(existentes).forEach(el => { const v = el.querySelector("video"); observador.unobserve(v); v.pause(); });
+  feed.innerHTML = "";
+  feed.appendChild(frag);
+  if (!lista.length) $("#info").textContent = "0 cortes";
+  if (!lista.length) feed.innerHTML = `<div class="vazio">${!cortes.length ? "Nenhum corte ainda. Eles aparecem aqui automaticamente."
+    : filtro === "novos" ? "🎉 Nenhum corte novo: você já assistiu todos."
+    : filtro === "postar" ? "Nenhum vídeo na lista Postar ainda. Clique em ⭐ Postar nos vídeos de que gostar."
+    : "Nenhum corte desse streamer."}</div>`;
+  feed.querySelectorAll(".corte").forEach((el, i) => el.querySelector("[data-pos]").textContent = `${i + 1} de ${lista.length}`);
+  feed.querySelectorAll("[data-apagar]").forEach(b => b.onclick = () => abrirModal(b.dataset.apagar));
+  feed.onclick = ev => {
+    const vi = ev.target.closest("[data-visto]");
+    if (vi) { const el = vi.closest(".corte"); marcarVisto(el, !el._c.assistido); return; }
+    const po = ev.target.closest("[data-postar]");
+    if (po) { const el = po.closest(".corte"); marcarCampo(el, "postar", !el._c.postar); return; }
+    const ed = ev.target.closest("[data-editar]"), rv = ev.target.closest("[data-reverter]");
+    if (ed && !ed.disabled) abrirEditor(ed.dataset.editar);
+    if (rv) pedirReversao(rv.dataset.reverter);
+  };
+  atualizarContagens();
+  const v = videoAtual(); if (v) atualizarPosicao(v.closest(".corte"));
+}
+
+function aplicarLista(nova) {
+  cortes = nova; pendentes = null; $("#novos").style.display = "none";
+  renderFiltros(); renderFeed();
+}
+
+let jaDesenhou = false;   // a 1ª carga (e a carga forçada) sempre desenha, mesmo com zero cortes
+
+async function carregar(forcar = false) {
+  try {
+    const r = await fetch("/api/cortes", {cache: "no-store"});
+    const nova = ordenar(await r.json());
+    if (forcar || !jaDesenhou) { jaDesenhou = true; aplicarLista(nova); return; }
+    const idsAtuais = new Set(cortes.map(c => c.id));
+    const chegaram = nova.filter(c => !idsAtuais.has(c.id) && (filtro === "todos" || c.canal === filtro)).length;
+    const sinal = c => [c.id, c.versao, c.editando, !!c.fonte, c.pode_reverter, c.sobra_pronta_em, (c.grafico || []).length,
+                        valorMarcado(c, "assistido"), valorMarcado(c, "postar")].join("|");
+    const mudou = nova.length !== cortes.length || nova.some((c, i) => !cortes[i] || sinal(cortes[i]) !== sinal(c));
+    if (!mudou) return;
+    if (cortes.length && chegaram && scrollY > 80) {
+      // usuário está no meio do feed: não empurra a tela, só avisa
+      pendentes = nova;
+      const b = $("#novos"); b.textContent = `▲ ${chegaram} corte${chegaram > 1 ? "s" : ""} novo${chegaram > 1 ? "s" : ""}`; b.style.display = "block";
+      return;
+    }
+    aplicarLista(nova);
+  } catch (e) { $("#info").textContent = "sem conexão com o main.py"; }
+}
+$("#novos").onclick = () => { if (pendentes) aplicarLista(pendentes); scrollTo({top: 0, behavior: "smooth"}); };
+
+// ---------------------------------------------------------------- modal de confirmação
+let apagando = null;
+function abrirModal(id) {
+  const c = cortes.find(x => x.id === id);
+  if (!c) return;
+  apagando = id;
+  $("#m-desc").innerHTML = `<b>${esc(c.canal)}</b> · capturado em ${esc(c.data_txt)}${c.titulo ? " · " + esc(c.titulo) : ""}`;
+  $("#m-erro").textContent = "";
+  $("#m-confirmar").disabled = false;
+  $("#fundo").classList.add("aberto");
+  $("#m-cancelar").focus();
+}
+function fecharModal() { $("#fundo").classList.remove("aberto"); apagando = null; }
+$("#m-cancelar").onclick = fecharModal;
+$("#fundo").onclick = ev => { if (ev.target.id === "fundo") fecharModal(); };
+$("#m-confirmar").onclick = async () => {
+  const id = apagando;
+  if (!id) return;
+  $("#m-confirmar").disabled = true;
+  // solta o arquivo no navegador antes de apagar (o Windows bloqueia arquivo em uso)
+  const el = document.querySelector(`.corte[data-id="${CSS.escape(id)}"]`);
+  const v = el && el.querySelector("video");
+  if (v) { observador.unobserve(v); v.pause(); v.removeAttribute("src"); v.load(); }
+  try {
+    const r = await fetch("/api/apagar", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id})});
+    const j = await r.json();
+    if (!r.ok || j.erro) throw new Error(j.erro || "falha ao apagar");
+    fecharModal();
+    if (el) { el.classList.add("saindo"); await new Promise(res => setTimeout(res, 300)); }
+    aplicarLista(cortes.filter(c => c.id !== id));
+    aviso("Corte apagado (" + j.removidos.length + " arquivo(s))");
+  } catch (e) {
+    $("#m-erro").textContent = e.message;
+    $("#m-confirmar").disabled = false;
+    if (v) { v.src = cortes.find(c => c.id === id).url; observador.observe(v); }
+  }
+};
+
+// ---------------------------------------------------------------- editor de tempo
+const ED = {c: null, dur: 0, s: 0, e: 0, s0: 0, e0: 0, pico: null, pararEm: null};
+const fmt = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1).replace(".", ",") + " s";
+
+function abrirEditor(id) {
+  const c = cortes.find(x => x.id === id);
+  if (!c || !c.fonte) return;
+  document.querySelectorAll("#feed video").forEach(v => v.pause());
+  ED.c = c;
+  ED.dur = c.fonte.duracao;
+  ED.s0 = Math.max(0, c.inicio_corte - c.fonte.inicio);
+  ED.e0 = Math.min(ED.dur, ED.s0 + c.duracao_exata);
+  ED.s = ED.s0; ED.e = ED.e0;
+  ED.pico = c.pico ? c.pico - c.fonte.inicio : null;
+  $("#ed-desc").innerHTML = `<b>${esc(c.canal)}</b> · capturado em ${esc(c.data_txt)} · vídeo original disponível: ${Math.round(ED.dur)} s`;
+  $("#ed-erro").textContent = "";
+  $("#ed-salvar").disabled = false;
+  const v = $("#ed-video");
+  v.src = c.fonte.url; v.muted = !comSom;
+  v.onloadedmetadata = () => { v.currentTime = ED.s; };
+  // escala de tempo (relativa ao pico)
+  const ref = ED.pico ?? ED.s0;
+  $("#ed-escala").innerHTML = [0, .25, .5, .75, 1].map(f => `<span>${fmt(f * ED.dur - ref)}</span>`).join("");
+  $("#ed-fundo").classList.add("aberto");
+  desenharEditor();
+}
+
+function desenharEditor() {
+  const pct = t => (100 * t / ED.dur) + "%";
+  Object.assign($("#ed-sel").style, {left: pct(ED.s), width: pct(ED.e - ED.s)});
+  Object.assign($("#ed-atual").style, {left: pct(ED.s0), width: pct(ED.e0 - ED.s0)});
+  const mp = $("#ed-pico");
+  if (ED.pico != null) { mp.style.display = "block"; mp.style.left = pct(ED.pico); } else mp.style.display = "none";
+  const ref = ED.pico ?? ED.s0, rot = ED.pico != null ? "do pico" : "do início original";
+  const d = ED.e - ED.s;
+  $("#ed-leitura").innerHTML = `Início: <b>${fmt(ED.s - ref)}</b> · Fim: <b>${fmt(ED.e - ref)}</b> <span style="color:var(--sub)">(${rot})</span>` +
+    ` · Duração: <b>${d.toFixed(1).replace(".", ",")} s</b>` +
+    (d > 60 ? ' <span style="color:var(--amarelo)">· acima de 60 s (Shorts/Reels podem cortar)</span>' : "");
+}
+
+function ajustar(lado, valor) {
+  const MIN = 3, MAX = 180;
+  if (lado === "ini") ED.s = Math.min(Math.max(0, valor), ED.e - MIN, ED.dur);
+  else ED.e = Math.max(Math.min(ED.dur, valor), ED.s + MIN);
+  if (ED.e - ED.s > MAX) { if (lado === "ini") ED.s = ED.e - MAX; else ED.e = ED.s + MAX; }
+  desenharEditor();
+}
+
+// arrastar as bordas e clicar na trilha
+(() => {
+  const trilho = $("#ed-trilho"), v = $("#ed-video");
+  const tempoEm = x => { const r = trilho.getBoundingClientRect(); return Math.min(1, Math.max(0, (x - r.left) / r.width)) * ED.dur; };
+  const arrastar = (lado) => ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const mover = mv => { ajustar(lado, tempoEm(mv.clientX)); v.currentTime = lado === "ini" ? ED.s : ED.e; };
+    const soltar = () => { removeEventListener("pointermove", mover); removeEventListener("pointerup", soltar); };
+    addEventListener("pointermove", mover); addEventListener("pointerup", soltar);
+  };
+  $("#ed-h-ini").onpointerdown = arrastar("ini");
+  $("#ed-h-fim").onpointerdown = arrastar("fim");
+  trilho.onpointerdown = ev => { if (!ev.target.classList.contains("alca-t")) v.currentTime = tempoEm(ev.clientX); };
+  v.ontimeupdate = () => {
+    $("#ed-cabeca").style.left = (100 * v.currentTime / ED.dur) + "%";
+    if (ED.pararEm != null && v.currentTime >= ED.pararEm) { v.pause(); ED.pararEm = null; }
+  };
+  document.querySelectorAll("#ed-fundo [data-f]").forEach(b => b.onclick = () => {
+    const [lado, d] = b.dataset.f.split(":");
+    ajustar(lado, (lado === "ini" ? ED.s : ED.e) + Number(d));
+    v.currentTime = lado === "ini" ? ED.s : Math.max(ED.s, ED.e - 3);
+  });
+  $("#ed-assistir").onclick = () => { v.currentTime = ED.s; ED.pararEm = ED.e; v.play().catch(() => {}); };
+  $("#ed-reset").onclick = () => { ED.s = ED.s0; ED.e = ED.e0; desenharEditor(); v.currentTime = ED.s; };
+  $("#ed-cancelar").onclick = fecharEditor;
+  $("#ed-fundo").onclick = ev => { if (ev.target.id === "ed-fundo") fecharEditor(); };
+  $("#ed-salvar").onclick = async () => {
+    if (Math.abs(ED.s - ED.s0) < 0.05 && Math.abs(ED.e - ED.e0) < 0.05) { $("#ed-erro").textContent = "O trecho não mudou."; return; }
+    $("#ed-salvar").disabled = true;
+    try {
+      const r = await fetch("/api/editar", {method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({id: ED.c.id, inicio: ED.s, fim: ED.e})});
+      const j = await r.json();
+      if (!r.ok || j.erro) throw new Error(j.erro || "falha ao enviar o ajuste");
+      fecharEditor();
+      aviso("Ajuste enviado: o corte será refeito em ~30–40 s");
+      carregar();
+    } catch (e) { $("#ed-erro").textContent = e.message; $("#ed-salvar").disabled = false; }
+  };
+})();
+
+function fecharEditor() {
+  const v = $("#ed-video"); v.pause(); v.removeAttribute("src"); v.load();
+  $("#ed-fundo").classList.remove("aberto"); ED.c = null;
+}
+
+// ---------------------------------------------------------------- apagar todos do streamer
+let apagandoCanal = null;
+function abrirApagarTodos() {
+  if (["todos", "novos", "postar"].includes(filtro)) return;
+  const lista = cortes.filter(c => c.canal === filtro);
+  if (!lista.length) return;
+  apagandoCanal = filtro;
+  const mb = lista.reduce((s, c) => s + c.tamanho_mb, 0);
+  $("#at-titulo").textContent = `Apagar TODOS os cortes de ${filtro}?`;
+  $("#at-desc").innerHTML = `<b>${lista.length} corte${lista.length > 1 ? "s" : ""}</b> de <b>${esc(filtro)}</b> · ${mb.toFixed(0)} MB em vídeos`;
+  $("#at-erro").textContent = "";
+  $("#at-confirmar").disabled = false;
+  $("#at-confirmar").textContent = `🗑 Apagar ${lista.length} corte${lista.length > 1 ? "s" : ""}`;
+  $("#at-fundo").classList.add("aberto");
+  $("#at-cancelar").focus();
+}
+const fecharApagarTodos = () => { $("#at-fundo").classList.remove("aberto"); apagandoCanal = null; };
+$("#at-cancelar").onclick = fecharApagarTodos;
+$("#at-fundo").onclick = ev => { if (ev.target.id === "at-fundo") fecharApagarTodos(); };
+$("#at-confirmar").onclick = async () => {
+  const canal = apagandoCanal;
+  if (!canal) return;
+  $("#at-confirmar").disabled = true;
+  // solta os arquivos no navegador antes de apagar (o Windows bloqueia arquivo em uso)
+  document.querySelectorAll("#feed .corte").forEach(el => {
+    if (el._c && el._c.canal === canal) { const v = el.querySelector("video"); observador.unobserve(v); v.pause(); v.removeAttribute("src"); v.load(); }
+  });
+  try {
+    const r = await fetch("/api/apagar_canal", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({canal})});
+    const j = await r.json();
+    if (!r.ok || j.erro) throw new Error(j.erro || "falha ao apagar");
+    fecharApagarTodos();
+    filtro = "todos"; history.replaceState(null, "", "/videos");
+    aviso(`${j.apagados} corte(s) de ${canal} apagado(s)` + (j.pulados ? ` · ${j.pulados} pulado(s) (em ajuste)` : ""));
+    scrollTo({top: 0}); await carregar(true);
+  } catch (e) { $("#at-erro").textContent = e.message; $("#at-confirmar").disabled = false; }
+};
+
+// ---------------------------------------------------------------- reverter
+let revertendo = null;
+function pedirReversao(id) {
+  const c = cortes.find(x => x.id === id);
+  if (!c) return;
+  revertendo = id;
+  $("#rv-desc").innerHTML = `<b>${esc(c.canal)}</b> · capturado em ${esc(c.data_txt)}`;
+  $("#rv-erro").textContent = ""; $("#rv-confirmar").disabled = false;
+  $("#rv-fundo").classList.add("aberto");
+}
+const fecharRev = () => { $("#rv-fundo").classList.remove("aberto"); revertendo = null; };
+$("#rv-cancelar").onclick = fecharRev;
+$("#rv-fundo").onclick = ev => { if (ev.target.id === "rv-fundo") fecharRev(); };
+$("#rv-confirmar").onclick = async () => {
+  $("#rv-confirmar").disabled = true;
+  const el = document.querySelector(`.corte[data-id="${CSS.escape(revertendo)}"] video`);
+  if (el) { el.pause(); el.removeAttribute("src"); el.load(); }   // solta o arquivo (Windows)
+  try {
+    const r = await fetch("/api/reverter", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id: revertendo})});
+    const j = await r.json();
+    if (!r.ok || j.erro) throw new Error(j.erro || "falha ao reverter");
+    fecharRev(); aviso("Corte revertido ao original"); carregar();
+  } catch (e) { $("#rv-erro").textContent = e.message; $("#rv-confirmar").disabled = false; }
+};
+
+// altura real do cabeçalho fixo (para o encaixe da rolagem)
+const ajustarTopo = () => document.documentElement.style.setProperty("--topo", $("#fixo").offsetHeight + "px");
+addEventListener("resize", ajustarTopo);
+ajustarTopo();
+aplicarSom();
+carregar().then(ajustarTopo);
+setInterval(carregar, 8000);
+</script>
+</body>
+</html>

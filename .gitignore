@@ -1,0 +1,13 @@
+# ambiente e cache
+.venv/
+__pycache__/
+*.pyc
+
+# dados gerados em execução
+buffer/
+cortes/
+logs/
+tmp/
+
+# segredo do painel (gerado de novo na outra máquina)
+painel_chave.txt
