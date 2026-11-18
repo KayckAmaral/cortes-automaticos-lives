@@ -63,6 +63,8 @@ class Gerenciador:
         self.fila = fila
         self.lock = threading.RLock()
         self.rodando: dict[str, dict] = {}   # nome -> {det, leitor, grav}
+        # preenchido pelo VigiaDisco; "pausados" = canais parados por falta de espaço (retomar manual)
+        self.disco = {"baixo": False, "livre_gb": None, "limite_gb": None, "pausados": []}
         for c in canais:
             self.por_nome[c["nome"]] = c
             self._publicar(c)
@@ -73,7 +75,10 @@ class Gerenciador:
         with self.estado.lock:
             ch.update(plataforma=c["plataforma"], url=c["url"], ativo=bool(c.get("ativo")),
                       rodando=c["nome"] in self.rodando, config=self._config_visivel(c))
-            if c["nome"] not in self.rodando:
+            if c["nome"] in self.disco["pausados"]:
+                ch.update(gravando=False, gravacao_msg="⛔ pausado: disco cheio", chat_ok=False,
+                          chat_msg="⛔ pausado: disco cheio")
+            elif c["nome"] not in self.rodando:
                 ch.update(gravando=False, gravacao_msg="parado", chat_ok=False, chat_msg="parado")
 
     def _config_visivel(self, c: dict) -> dict:
@@ -107,6 +112,12 @@ class Gerenciador:
             c = self.por_nome[nome]
             if nome in self.rodando:
                 return
+            if self.disco["baixo"]:
+                if nome not in self.disco["pausados"]:
+                    self.disco["pausados"].append(nome)
+                self._publicar(c)
+                raise RuntimeError(f"Disco quase cheio ({self.disco['livre_gb']} GB livres, mínimo "
+                                   f"{self.disco['limite_gb']:.0f} GB). Libere espaço antes de iniciar.")
             det = Detector(c, config_canal(self.cfg, c, "detector"), self.estado, self.fila.adicionar)
             leitor = criar_leitor(c, det.receber, self.estado)
             grav = Gravador(c, self.cfg, self.estado)
@@ -119,8 +130,37 @@ class Gerenciador:
             self._publicar(c)
             log.info("canal %s (%s) iniciado", nome, c["plataforma"])
 
+    def pausar_por_disco(self):
+        """Para todos os canais SEM marcar ativo: false (o 'Retomar' do alerta liga de novo)."""
+        with self.lock:
+            for nome in list(self.rodando):
+                for t in self.rodando.pop(nome).values():
+                    t.encerrar()
+                if nome not in self.disco["pausados"]:
+                    self.disco["pausados"].append(nome)
+                log.warning("canal %s pausado (disco cheio)", nome)
+                self._publicar(self.por_nome[nome])
+
+    def retomar_disco(self) -> list[str]:
+        with self.lock:
+            if self.disco["baixo"]:
+                raise RuntimeError(f"O disco ainda está com {self.disco['livre_gb']} GB livres. Libere espaço "
+                                   f"até passar de {self.disco['limite_gb']:.0f} GB (apague cortes em Vídeos).")
+            nomes = [n for n in self.disco["pausados"] if n in self.por_nome]
+            self.disco["pausados"] = []
+        for nome in nomes:
+            self.iniciar(nome)
+        log.info("canais retomados depois do disco cheio: %s", nomes)
+        return nomes
+
+    def info_disco(self) -> dict:
+        with self.lock:
+            return {**self.disco, "pausados": list(self.disco["pausados"])}
+
     def parar(self, nome: str, salvar=True):
         with self.lock:
+            if nome in self.disco["pausados"]:
+                self.disco["pausados"].remove(nome)
             r = self.rodando.pop(nome, None)
             if r:
                 for t in r.values():

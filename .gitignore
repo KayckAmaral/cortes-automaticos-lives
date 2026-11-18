@@ -11,3 +11,4 @@ tmp/
 
 # segredo do painel (gerado de novo na outra máquina)
 painel_chave.txt
+postar/

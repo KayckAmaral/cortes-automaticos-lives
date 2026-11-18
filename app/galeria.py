@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from . import capa
 from .util import RAIZ
 
 log = logging.getLogger("galeria")
@@ -45,6 +46,7 @@ def listar(pasta_cortes: Path) -> list[dict]:
             "editado": bool(meta.get("editado")),
             "assistido": bool(meta.get("assistido")),
             "postar": bool(meta.get("postar")),
+            "capa": capa.info(f"{canal}/{base}", int(st.st_mtime), meta) if meta.get("postar") else None,
             "gatilho": meta.get("gatilho") or ("manual" if meta.get("manual") else "chat"),
             "mudo_inicio": meta.get("mudo_inicio") or 0,
             "pode_reverter": (mp4.parent / "_originais" / f"{base}.mp4").exists(),

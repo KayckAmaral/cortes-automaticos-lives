@@ -1,17 +1,167 @@
 # Gerenciado pelo painel (http://localhost:8000). Pode editar à mão com o sistema parado.
 canais:
+- nome: alanzoka
+  plataforma: twitch
+  url: https://twitch.tv/alanzoka
+  ativo: false
+  offset_seg: 0.0
+  layout: camera_gameplay
+  camera:
+    x: 0.7793
+    y: 0.2531
+    w: 0.2137
+    h: 0.2871
+  gameplay_offset_x: 0.45
+  detector:
+    multiplicador: 3.5
+    minimo_absoluto: 80.0
+    min_usuarios_unicos: 40
+    pausa_entre_cortes_seg: 60
+    janela_seg: 5
+    base_minutos: 5
+    limite_saudacoes: 0.5
+    saudacoes:
+    - SALVE
+    - OI
+    - OLA
+    - OPA
+    - EAI
+    - EAE
+    - BOA NOITE
+    - BOA TARDE
+    - BOM DIA
+    - MANDA UM SALVE
+    - MANDA SALVE
+    - MANDA UM OI
+    - ME RESPONDE
+    - LE MEU NOME
+    - FALA COMIGO
+    - ME NOTA
+    - ME VE
+  corte:
+    antes_seg: 25.0
+    depois_seg: 5.0
+  audio:
+    limiar_db: 12.0
+    confirmacao_chat: 1.5
+    ativo: true
+  legenda:
+    falas_jogo: silencio
+    traduzir_jogo: true
+  credito_ativo: true
+  credito_texto: ''
+- nome: paulinholokobr
+  plataforma: twitch
+  url: https://twitch.tv/paulinholokobr
+  ativo: false
+  offset_seg: 0.0
+  layout: camera_gameplay
+  camera:
+    x: 0.0234
+    y: 0.0354
+    w: 0.1568
+    h: 0.2676
+  gameplay_offset_x: 0.6
+  detector:
+    multiplicador: 3.0
+    minimo_absoluto: 25.0
+    min_usuarios_unicos: 15
+    pausa_entre_cortes_seg: 60
+    janela_seg: 5
+    base_minutos: 5
+    limite_saudacoes: 0.5
+    saudacoes:
+    - SALVE
+    - OI
+    - OLA
+    - OPA
+    - EAI
+    - EAE
+    - BOA NOITE
+    - BOA TARDE
+    - BOM DIA
+    - MANDA UM SALVE
+    - MANDA SALVE
+    - MANDA UM OI
+    - ME RESPONDE
+    - LE MEU NOME
+    - FALA COMIGO
+    - ME NOTA
+    - ME VE
+  corte:
+    antes_seg: 25.0
+    depois_seg: 5.0
+  audio:
+    limiar_db: 12.0
+    confirmacao_chat: 1.5
+    ativo: true
+  legenda:
+    falas_jogo: desligado
+    traduzir_jogo: true
+  credito_ativo: true
+  credito_texto: ''
 - nome: gabepeixe
   plataforma: kick
   url: https://kick.com/gabepeixe
-  ativo: true
+  ativo: false
   chatroom_id: null
   offset_seg: 0.0
   layout: camera_gameplay
   camera:
-    x: 0.0058
-    y: 0.0094
-    w: 0.2316
-    h: 0.2869
+    x: 0.752
+    y: 0.018
+    w: 0.2387
+    h: 0.2773
+  gameplay_offset_x: 0.35
+  detector:
+    multiplicador: 3.0
+    minimo_absoluto: 25.0
+    min_usuarios_unicos: 15
+    pausa_entre_cortes_seg: 60
+    janela_seg: 5
+    base_minutos: 5
+    limite_saudacoes: 0.5
+    saudacoes:
+    - SALVE
+    - OI
+    - OLA
+    - OPA
+    - EAI
+    - EAE
+    - BOA NOITE
+    - BOA TARDE
+    - BOM DIA
+    - MANDA UM SALVE
+    - MANDA SALVE
+    - MANDA UM OI
+    - ME RESPONDE
+    - LE MEU NOME
+    - FALA COMIGO
+    - ME NOTA
+    - ME VE
+  corte:
+    antes_seg: 25.0
+    depois_seg: 5.0
+  audio:
+    limiar_db: 12.0
+    confirmacao_chat: 1.5
+    ativo: true
+  legenda:
+    falas_jogo: silencio
+    traduzir_jogo: true
+  credito_ativo: true
+  credito_texto: ''
+- nome: davyjones
+  plataforma: kick
+  url: https://kick.com/davyjones
+  ativo: false
+  offset_seg: 0.0
+  layout: camera_gameplay
+  camera:
+    x: 0.7847
+    y: 0.0957
+    w: 0.209
+    h: 0.208
   gameplay_offset_x: 0.5
   detector:
     multiplicador: 3.0
@@ -51,116 +201,11 @@ canais:
     traduzir_jogo: true
   credito_ativo: true
   credito_texto: ''
-- nome: dona
-  plataforma: kick
-  url: https://kick.com/dona
-  ativo: false
-  chatroom_id: null
-  offset_seg: 0.0
-  layout: camera_gameplay
-  camera:
-    x: 0.0
-    y: 0.0
-    w: 0.283
-    h: 0.285
-  gameplay_offset_x: 0.55
-  detector:
-    multiplicador: 2.2
-    minimo_absoluto: 9.0
-    min_usuarios_unicos: 4
-    pausa_entre_cortes_seg: 60
-    janela_seg: 5
-    base_minutos: 5
-    limite_saudacoes: 0.5
-    saudacoes:
-    - SALVE
-    - OI
-    - OLA
-    - OPA
-    - EAI
-    - EAE
-    - BOA NOITE
-    - BOA TARDE
-    - BOM DIA
-    - MANDA UM SALVE
-    - MANDA SALVE
-    - MANDA UM OI
-    - ME RESPONDE
-    - LE MEU NOME
-    - FALA COMIGO
-    - ME NOTA
-    - ME VE
-  corte:
-    antes_seg: 25.0
-    depois_seg: 5.0
-  legenda:
-    falas_jogo: desligado
-    traduzir_jogo: true
-- nome: coreano
-  plataforma: twitch
-  url: https://twitch.tv/coreano
-  ativo: false
-  offset_seg: 0.0
-  layout: camera_gameplay
-  camera:
-    x: 0.0058
-    y: 0.0942
-    w: 0.2129
-    h: 0.2246
-  gameplay_offset_x: 0.5
-  detector:
-    multiplicador: 2.2
-    minimo_absoluto: 6.0
-    min_usuarios_unicos: 5
-    pausa_entre_cortes_seg: 60
-    janela_seg: 5
-    base_minutos: 5
-    limite_saudacoes: 0.5
-    saudacoes:
-    - SALVE
-    - OI
-    - OLA
-    - OPA
-    - EAI
-    - EAE
-    - BOA NOITE
-    - BOA TARDE
-    - BOM DIA
-    - MANDA UM SALVE
-    - MANDA SALVE
-    - MANDA UM OI
-    - ME RESPONDE
-    - LE MEU NOME
-    - FALA COMIGO
-    - ME NOTA
-    - ME VE
-  corte:
-    antes_seg: 25.0
-    depois_seg: 5.0
-  legenda:
-    falas_jogo: silencio
-    traduzir_jogo: true
-- nome: alanzoka
-  plataforma: twitch
-  url: https://twitch.tv/alanzoka
-  ativo: false
-  offset_seg: 0
-  layout: so_gameplay
-  camera: null
-  gameplay_offset_x: 0.5
 - nome: coringa
   plataforma: kick
   url: https://kick.com/coringa
   ativo: false
   chatroom_id: null
-  offset_seg: 0
-  layout: so_gameplay
-  camera: null
-  gameplay_offset_x: 0.5
-- nome: yuri22
-  plataforma: youtube
-  url: https://www.youtube.com/@yuri22ofc/live
-  ativo: false
   offset_seg: 0
   layout: so_gameplay
   camera: null

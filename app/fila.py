@@ -392,7 +392,7 @@ class Fila(threading.Thread):
             original = json.loads((orig / f"{base}.json").read_text(encoding="utf-8"))
             if atual.get("fonte"):  # a sobra pode ter sido registrada depois do backup
                 original["fonte"] = atual["fonte"]
-            for k in ("assistido", "assistido_em", "postar", "postar_em", "grafico"):  # valem para as duas versões
+            for k in ("assistido", "assistido_em", "postar", "postar_em", "grafico", "capa_texto"):  # valem para as duas versões
                 if k in atual:
                     original[k] = atual[k]
             os.replace(orig / f"{base}.mp4", pasta / f"{base}.mp4")

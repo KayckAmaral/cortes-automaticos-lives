@@ -1,6 +1,7 @@
 """Painel ao vivo em http://127.0.0.1:<porta> (servidor HTTP embutido, sem dependências)."""
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import mimetypes
@@ -12,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import galeria
+from . import capa, galeria
 from .util import RAIZ
 
 log = logging.getLogger("painel")
@@ -41,8 +42,25 @@ def _uso_sistema() -> dict:
     return dict(_uso)
 
 
+def _ip_tailscale() -> str | None:
+    """IP do Tailscale (100.64.0.0/10), se instalado: o celular acessa de qualquer rede."""
+    try:
+        import psutil
+        for enderecos in psutil.net_if_addrs().values():
+            for e in enderecos:
+                if e.family == socket.AF_INET and ipaddress.ip_address(e.address) in ipaddress.ip_network("100.64.0.0/10"):
+                    return e.address
+    except Exception:
+        pass
+    return None
+
+
 def _ip_local() -> str:
-    """IP do notebook na rede Wi-Fi/cabo (não envia nada: só pergunta ao sistema a rota)."""
+    """IP do notebook na rede Wi-Fi/cabo (não envia nada: só pergunta ao sistema a rota).
+    Com Tailscale, usa o IP dele (funciona fora do Wi-Fi de casa)."""
+    ts = _ip_tailscale()
+    if ts:
+        return ts
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("10.255.255.255", 1))
@@ -65,9 +83,10 @@ def _chave_celular() -> str:
     return k
 
 
-def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True):
+def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True, capas=None):
     porta = int(cfg.get("painel", {}).get("porta", 8000))
     pasta_cortes = (RAIZ / cfg["geral"]["pasta_cortes"]).resolve()
+    pasta_postar = capa.PASTA.resolve()
     celular = bool(cfg.get("painel", {}).get("acesso_celular", False))
     chave = _chave_celular() if celular else ""
 
@@ -132,7 +151,8 @@ def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True):
                     return self._json({"erro": "só no notebook"}, 403)
                 if not celular:
                     return self._json({"ativo": False})
-                return self._json({"ativo": True, "url": f"http://{_ip_local()}:{porta}/?chave={chave}"})
+                return self._json({"ativo": True, "tailscale": _ip_tailscale() is not None,
+                                   "url": f"http://{_ip_local()}:{porta}/?chave={chave}"})
             if caminho in ("/", "/index.html", "/galeria", "/videos"):
                 dados = (HTML_GALERIA if caminho in ("/galeria", "/videos") else HTML).read_bytes()
                 self.send_response(200)
@@ -154,6 +174,7 @@ def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True):
                 snap = estado.snapshot()
                 snap["videos_novos"] = galeria.contar_novos(pasta_cortes)
                 snap["sistema"] = _uso_sistema()
+                snap["disco"] = ger.info_disco()
                 self._json(snap)
             elif caminho.startswith("/api/frame/"):
                 nome = caminho.rsplit("/", 1)[-1]
@@ -167,7 +188,7 @@ def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(png)
-            elif caminho.startswith("/cortes/"):
+            elif caminho.startswith(("/cortes/", "/postar/")):
                 self._arquivo(caminho)
             else:
                 self.send_error(404)
@@ -208,6 +229,17 @@ def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True):
                     d = self._corpo()
                     galeria.marcar(pasta_cortes, str(d.get("id", "")), str(d.get("campo", "")),
                                    bool(d.get("valor", True)), ger.fila.lock_arquivos)
+                    if capas and d.get("campo") == "postar":
+                        capas.acordar()   # gera (ou apaga) a capa na hora
+                    return self._json({"ok": True})
+                if caminho == "/api/capa":
+                    d = self._corpo()
+                    corte_id = str(d.get("id", ""))
+                    if not capas:
+                        return self._json({"erro": "gerador de capas desligado"}, 400)
+                    if not galeria.RE_ID.match(corte_id) or corte_id.startswith("."):
+                        return self._json({"erro": "id de corte inválido"}, 400)
+                    capas.definir_texto(corte_id, str(d.get("texto", "")))
                     return self._json({"ok": True})
                 if caminho == "/api/apagar_canal":
                     canal = str(self._corpo().get("canal", ""))
@@ -240,6 +272,8 @@ def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True):
                         return self._json({"erro": "lista inválida"}, 400)
                     ger.reordenar([str(n) for n in nomes])
                     return self._json({"ok": True})
+                if caminho == "/api/disco/retomar":
+                    return self._json({"ok": True, "retomados": ger.retomar_disco()})
                 if caminho == "/api/canais":
                     c = ger.adicionar(self._corpo().get("url", ""))
                     return self._json({"ok": True, "nome": c["nome"]})
@@ -270,7 +304,7 @@ def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True):
 
         def _arquivo(self, caminho: str):
             alvo = (RAIZ / caminho.lstrip("/")).resolve()
-            if pasta_cortes not in alvo.parents or not alvo.is_file():
+            if (pasta_cortes not in alvo.parents and pasta_postar not in alvo.parents) or not alvo.is_file():
                 return self.send_error(404)
             tamanho = alvo.stat().st_size
             tipo = mimetypes.guess_type(alvo.name)[0] or "application/octet-stream"
@@ -280,6 +314,11 @@ def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True):
                 a, _, b = rng[6:].partition("-")
                 ini = int(a) if a else 0
                 fim = min(int(b), tamanho - 1) if b else tamanho - 1
+                if ini >= tamanho or ini > fim:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{tamanho}")
+                    self.send_header("Content-Length", "0")
+                    return self.end_headers()
                 self.send_response(206)
                 self.send_header("Content-Range", f"bytes {ini}-{fim}/{tamanho}")
             else:
@@ -314,7 +353,8 @@ def iniciar_painel(cfg: dict, estado, ger, abrir_navegador: bool = True):
     url = f"http://localhost:{porta}"
     log.info("painel em %s", url)
     if celular:
-        log.info("acesso pelo celular ATIVO (mesma rede Wi-Fi): botão 📱 Celular no painel mostra o QR code")
+        onde = f"qualquer rede via Tailscale {_ip_tailscale()}" if _ip_tailscale() else "mesma rede Wi-Fi"
+        log.info("acesso pelo celular ATIVO (%s): botão 📱 Celular no painel mostra o QR code", onde)
     if abrir_navegador:
         webbrowser.open(url)
     return srv

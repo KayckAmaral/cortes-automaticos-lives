@@ -16,6 +16,15 @@
   header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; flex-wrap: wrap;
            border-bottom: 1px solid var(--borda); position: sticky; top: 0; background: var(--bg); z-index: 5; }
   header h1 { font-size: 18px; margin: 0; }
+  .alerta-disco.liberado { background: #1e7a3c; }
+  .alerta-disco.liberado button { color: #1e7a3c; }
+  .alerta-disco { flex-basis: calc(100% + 40px); order: 99; margin: 4px -20px -12px; background: #b3261e; color: #fff;
+                  padding: 10px 20px; font-size: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .alerta-disco[hidden] { display: none; }
+  .alerta-disco b { font-size: 15px; }
+  .alerta-disco button { background: #fff; color: #b3261e; border: 0; border-radius: 6px; padding: 6px 12px;
+                         font-weight: 700; cursor: pointer; }
+  .alerta-disco button:disabled { opacity: .6; cursor: default; }
   nav a { color: var(--sub); text-decoration: none; margin-right: 14px; font-weight: 600; }
   nav a.atual { color: var(--txt); border-bottom: 2px solid var(--azul); padding-bottom: 2px; }
   nav a:hover { color: var(--txt); }
@@ -131,7 +140,8 @@
   </form>
   <div class="info" id="info">conectando…</div>
   <div class="uso" id="uso" title="uso do notebook"></div>
-  <button class="sec" id="btn-celular" title="abrir o painel no celular (mesma rede Wi-Fi)">📱 Celular</button>
+  <button class="sec" id="btn-celular" title="abrir o painel no celular (mesmo Wi-Fi, ou qualquer rede com Tailscale)">📱 Celular</button>
+  <div class="alerta-disco" id="alerta-disco" hidden></div>
 </header>
 <div class="fundo-modal" id="cel-fundo">
   <div class="modal-cel">
@@ -149,6 +159,14 @@
 </main>
 <div id="aviso"></div>
 <script>
+// todos os vídeos tocam em 2x (só na tela: o arquivo baixado continua em 1x). Trocar o src (o player é solto/religado conforme a rolagem) volta a
+// velocidade para 1x, por isso ela é reaplicada sempre que um vídeo carrega ou começa a tocar.
+const VELOCIDADE = 2;
+for (const ev of ["loadedmetadata", "play"])
+  document.addEventListener(ev, e => {
+    const v = e.target;
+    if (v.tagName === "VIDEO" && v.playbackRate !== VELOCIDADE) v.defaultPlaybackRate = v.playbackRate = VELOCIDADE;
+  }, true);   // captura: esses eventos não sobem até o document
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmtHora = t => new Date(t * 1000).toLocaleTimeString("pt-BR");
@@ -693,6 +711,35 @@ function renderCortes(cortes) {
     </div>`).join("") : '<div class="vazio">nenhum ainda</div>';
 }
 
+// ---------------------------------------------------------------- alerta de disco cheio (igual ao da galeria)
+function htmlAlertaDisco(d) {
+  if (!d || (!d.baixo && !(d.pausados || []).length)) return "";
+  const lista = (d.pausados || []).join(", ") || "nenhum canal rodando";
+  return d.baixo
+    ? `<span>⛔ <b>Disco quase cheio: ${d.livre_gb} GB livres</b> (mínimo ${d.limite_gb} GB). Monitoramento PAUSADO (${esc(lista)}).
+       Apague cortes em 🎬 Vídeos para liberar espaço; depois aparece o botão Retomar.</span>`
+    : `<span>✅ <b>Espaço liberado: ${d.livre_gb} GB livres.</b> Canais pausados: ${esc(lista)}.</span>
+       <button data-retomar-disco>▶ Retomar monitoramento</button>`;
+}
+let ultimoAlertaDisco = null;
+function mostrarAlertaDisco(d) {
+  const h = htmlAlertaDisco(d);
+  if (h === ultimoAlertaDisco) return;
+  ultimoAlertaDisco = h;
+  const el = $("#alerta-disco");
+  el.innerHTML = h; el.hidden = !h; el.classList.toggle("liberado", !!d && !d.baixo);
+  document.title = d && d.baixo ? "⛔ DISCO CHEIO · Painel de Cortes" : "Painel de Cortes";
+  const b = el.querySelector("[data-retomar-disco]");
+  if (b) b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const j = await (await fetch("/api/disco/retomar", {method: "POST"})).json();
+      if (j.erro) alert(j.erro);
+    } catch (err) { alert(err.message); }
+    b.disabled = false;
+  };
+}
+
 async function atualizar() {
   try {
     const r = await fetch("/api/estado", {cache: "no-store"});
@@ -701,9 +748,13 @@ async function atualizar() {
     const s = e.sistema || {};
     if (s.cpu != null) {
       const nivel = v => v >= 90 ? "alto" : v >= 75 ? "medio" : "ok";
+      const d = e.disco || {};
+      const nivelDisco = d.livre_gb == null ? "ok" : d.livre_gb < d.limite_gb ? "alto" : d.livre_gb < d.limite_gb + 6 ? "medio" : "ok";
       $("#uso").innerHTML = `CPU <b class="${nivel(s.cpu)}">${s.cpu}%</b> · RAM <b class="${nivel(s.ram)}">${s.ram}%</b>` +
-        ` <span style="opacity:.8">(${s.ram_livre_gb} GB livres)</span>`;
+        ` <span style="opacity:.8">(${s.ram_livre_gb} GB livres)</span>` +
+        (d.livre_gb != null ? ` · Disco <b class="${nivelDisco}" title="pausa tudo abaixo de ${d.limite_gb} GB">${d.livre_gb} GB</b>` : "");
     }
+    mostrarAlertaDisco(e.disco);
     const bn = $("#badge-novos"), n = e.videos_novos || 0;
     bn.hidden = !n; bn.textContent = n > 99 ? "99+" : n;
     $("#pulso").className = "pulso";
@@ -736,7 +787,10 @@ $("#btn-celular").onclick = async () => {
     const j = await (await fetch("/api/celular")).json();
     if (j.erro) { corpo.innerHTML = `<p>${esc(j.erro)}</p>`; return; }
     if (!j.ativo) { corpo.innerHTML = `<p>O acesso pelo celular está desligado (<code>painel.acesso_celular</code> no config.yaml).</p>`; return; }
-    corpo.innerHTML = `<p>1. O celular precisa estar na <b>mesma rede Wi-Fi</b> do notebook.<br>
+    const rede = j.tailscale
+      ? `🌐 <b>Tailscale ativo</b>: funciona de <b>qualquer rede</b> (4G, outro Wi-Fi), com o app Tailscale ligado no celular (mesma conta).`
+      : `O celular precisa estar na <b>mesma rede Wi-Fi</b> do notebook (para outras redes, instale o Tailscale).`;
+    corpo.innerHTML = `<p>1. ${rede}<br>
       2. Aponte a câmera do celular para o QR code.</p><div id="qr"></div>
       <p>Ou digite no navegador do celular:</p><div class="link-cel">${esc(j.url)}</div>
       <p>⚠ Esse link tem uma chave secreta: não compartilhe. Se não abrir, libere o Python no firewall do Windows (redes privadas).</p>`;

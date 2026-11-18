@@ -24,7 +24,7 @@ def _carregar(nome: str):
         if _modelo is None:
             from faster_whisper import WhisperModel
             log.info("carregando Whisper '%s' (CPU int8)...", nome)
-            _modelo = WhisperModel(nome, device="cpu", compute_type="int8", cpu_threads=4)
+            _modelo = WhisperModel(nome, device="cpu", compute_type="int8", cpu_threads=min(6, os.cpu_count() or 4))
             log.info("Whisper pronto")
     return _modelo
 

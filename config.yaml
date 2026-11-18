@@ -6,6 +6,7 @@ geral:
   qualidade: "720p60,720p,best" # ordem de preferência do streamlink
   max_fila: 5                   # cortes esperando processamento (descarta os piores)
   gravacao_travada_seg: 40      # sem dados novos por esse tempo → derruba e reconecta a gravação
+  disco_minimo_gb: 8            # abaixo disso de espaço livre no disco, PAUSA todos os canais e mostra alerta
   sobra_edicao_seg: 60          # vídeo extra guardado antes/depois de cada corte para ajustar o tempo depois (0 = desliga)
   pasta_buffer: "buffer"
   pasta_cortes: "cortes"
@@ -64,10 +65,17 @@ legenda:
 
 saida:
   fps: 30
-  encoder: "auto"               # auto | qsv | x264
+  encoder: "auto"               # auto | qsv | amf | x264
   bitrate: "4500k"
   zoom_so_gameplay: 1.35        # zoom da gameplay no layout so_gameplay
   credito: true                 # crédito do streamer no vídeo (ex.: "kick.com/coringa"); texto por canal no painel
+
+capa:
+  # Capa para o TikTok dos vídeos marcados ⭐ Postar: gerada sozinha na pasta postar/ (imagem .jpg e o vídeo
+  # com a capa nos primeiros quadros). No TikTok: Capa → arraste até o início do vídeo.
+  ativa: true
+  duracao_seg: 0.1              # quanto tempo a capa aparece no início do vídeo (0.1 s = 3 quadros)
+  bitrate: "8000k"              # o vídeo é recodificado: bitrate maior para não perder qualidade
 
 painel:
   porta: 8000

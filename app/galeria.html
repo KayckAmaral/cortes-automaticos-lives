@@ -13,6 +13,15 @@
   }
   * { box-sizing: border-box; }
   html { scroll-snap-type: y mandatory; scroll-padding-top: var(--topo); }
+  .alerta-disco { background: #b3261e; color: #fff; padding: 10px 20px; font-size: 14px; line-height: 1.4;
+                  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .alerta-disco[hidden] { display: none; }
+  .alerta-disco.liberado { background: #1e7a3c; }
+  .alerta-disco.liberado button { color: #1e7a3c; }
+  .alerta-disco b { font-size: 15px; }
+  .alerta-disco button { background: #fff; color: #b3261e; border: 0; border-radius: 6px; padding: 6px 12px;
+                         font-weight: 700; cursor: pointer; }
+  .alerta-disco button:disabled { opacity: .6; cursor: default; }
   body { margin: 0; background: var(--bg); color: var(--txt); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
   .fixo { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--borda); }
   header { display: flex; align-items: center; gap: 16px; padding: 10px 20px; flex-wrap: wrap; }
@@ -52,6 +61,13 @@
            display: flex; gap: 20px; align-items: center; justify-content: center; padding: 14px 20px;
            width: 100%; max-width: 980px; transition: opacity .3s, transform .3s; }
   .corte.saindo { opacity: 0; transform: scale(.95); }
+  /* fundo alternado (um claro, um escuro) para ver onde termina um vídeo e começa o outro; a sombra
+     estende a cor até as bordas da tela e o clip-path corta o que passaria para cima/baixo */
+  .corte { --fundo-corte: var(--bg); background: var(--fundo-corte);
+           box-shadow: 0 0 0 100vmax var(--fundo-corte); clip-path: inset(0 -100vmax); }
+  .corte:nth-child(even) { --fundo-corte: #222938; }
+  .corte:nth-child(even) .tag, .corte:nth-child(even) .jogo, .corte:nth-child(even) .btn.baixar,
+  .corte:nth-child(even) .capa-box { background: #2e3647; }
   .corte video { height: calc(100vh - var(--topo) - 28px); max-height: 900px; aspect-ratio: 9 / 16;
                  max-width: 100%; background: #000; border-radius: 12px; display: block; flex-shrink: 0; }
   /* informações com rolagem própria: os botões nunca ficam cortados */
@@ -115,6 +131,16 @@
     .feed { margin-left: 0; }
   }
   .vazio { color: var(--sub); padding: 60px 20px; text-align: center; }
+  /* menu oculto: some o cabeçalho e os filtros (o aviso de disco cheio continua aparecendo) */
+  .menu-btn { background: var(--card2); color: var(--txt); border: 1px solid var(--borda); border-radius: 99px;
+              padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+  #mostrar-menu { position: fixed; top: calc(var(--topo) + 8px); left: 8px; z-index: 7; display: none;
+                  background: rgba(30, 34, 43, .85); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+  body.sem-menu header, body.sem-menu .lateral { display: none; }
+  body.sem-menu .fixo { border-bottom: 0; }
+  body.sem-menu .feed { margin-left: 0; }
+  body.sem-menu .novos { left: 50%; }
+  body.sem-menu #mostrar-menu { display: block; }
   .novos { position: fixed; top: calc(var(--topo) + 10px); left: calc(50% + var(--lateral) / 2); transform: translateX(-50%); z-index: 6;
            background: var(--azul); color: #06121f; border: 0; border-radius: 99px; padding: 8px 18px;
            font: inherit; font-weight: 700; cursor: pointer; display: none; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
@@ -133,6 +159,18 @@
   .modal .confirmar { background: var(--vermelho); color: #fff; border-color: var(--vermelho); }
   .modal .erro { color: var(--vermelho); font-size: 13px; }
   .acoes-edicao { display: flex; gap: 8px; flex-wrap: wrap; }
+  .capa-box { display: flex; gap: 12px; margin-top: 8px; padding: 10px; border: 1px solid rgba(62, 207, 142, .35);
+              border-radius: 8px; background: var(--card2); }
+  .capa-box img { width: 86px; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 6px; display: block; }
+  .capa-lado { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+  .capa-lado form { display: flex; gap: 6px; }
+  .capa-lado input { flex: 1; min-width: 0; background: var(--bg); color: var(--txt); border: 1px solid var(--borda);
+                     border-radius: 7px; padding: 8px; font: inherit; text-transform: uppercase; }
+  .capa-lado form .btn { flex: none; background: var(--card); color: var(--txt); }
+  .capa-lado .btn.baixar { flex: none; background: var(--verde); color: #04170e; border-color: var(--verde); }
+  .capa-lado small { color: var(--sub); }
+  .capa-lado .link { background: none; border: 0; color: var(--azul); padding: 0; font: inherit; cursor: pointer; text-align: left; }
+  .capa-erro { color: var(--vermelho); }
   .btn.editar { background: var(--azul); color: #06121f; border-color: var(--azul); }
   .btn.editar:disabled { background: var(--card2); color: var(--sub); border-color: var(--borda); cursor: default; }
   .btn.reverter { background: transparent; color: var(--amarelo); }
@@ -176,11 +214,14 @@
     <div class="dir">
       <span id="info">carregando…</span>
       <button class="som" id="som">🔇 Som desligado</button>
+      <button class="menu-btn" id="ocultar-menu" title="esconder o menu e os filtros (mais espaço para o vídeo)">✕ Ocultar menu</button>
     </div>
   </header>
+  <div class="alerta-disco" id="alerta-disco" hidden></div>
 </div>
 <aside class="lateral" id="filtros"></aside>
 <button class="novos" id="novos"></button>
+<button class="menu-btn" id="mostrar-menu" title="mostrar o menu e os filtros">☰ Menu</button>
 <div class="feed" id="feed"></div>
 
 <div class="fundo" id="fundo">
@@ -268,6 +309,14 @@
 <div id="aviso"></div>
 
 <script>
+// todos os vídeos tocam em 2x (só na tela: o arquivo baixado continua em 1x). Trocar o src (o player é solto/religado conforme a rolagem) volta a
+// velocidade para 1x, por isso ela é reaplicada sempre que um vídeo carrega ou começa a tocar.
+const VELOCIDADE = 2;
+for (const ev of ["loadedmetadata", "play"])
+  document.addEventListener(ev, e => {
+    const v = e.target;
+    if (v.tagName === "VIDEO" && v.playbackRate !== VELOCIDADE) v.defaultPlaybackRate = v.playbackRate = VELOCIDADE;
+  }, true);   // captura: esses eventos não sobem até o document
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let cortes = [];          // lista exibida (já ordenada: mais recente primeiro)
@@ -297,11 +346,24 @@ $("#som").onclick = () => {
   const v = videoAtual(); if (v) v.play().catch(() => {});
 };
 
+// ---------------------------------------------------------------- player só perto da tela
+// O celular tem limite de players de vídeo ao mesmo tempo: com dezenas de cortes, os mais
+// antigos (embaixo) ficavam "indisponíveis". Só os vídeos a até ~2 telas de distância têm
+// o arquivo carregado; os que se afastam soltam o player (e o arquivo, para o "Apagar").
+function ligarPlayer(v) { if (!v.getAttribute("src") && v.dataset.src) v.src = v.dataset.src; }
+function soltarPlayer(v) { if (v.getAttribute("src")) { v.pause(); v.removeAttribute("src"); v.load(); } }
+const carregador = new IntersectionObserver(entradas => {
+  for (const e of entradas) e.isIntersecting ? ligarPlayer(e.target) : soltarPlayer(e.target);
+}, {rootMargin: "200% 0px"});
+function seguir(v) { carregador.observe(v); observador.observe(v); }
+function largar(v) { carregador.unobserve(v); observador.unobserve(v); soltarPlayer(v); }
+
 // ---------------------------------------------------------------- autoplay do vídeo visível
 const observador = new IntersectionObserver(entradas => {
   for (const e of entradas) {
     const v = e.target;
     if (e.isIntersecting && e.intersectionRatio >= 0.6) {
+      ligarPlayer(v);
       v.muted = !comSom;
       v.play().catch(() => { v.muted = true; comSom = false; aplicarSom(); v.play().catch(() => {}); });
       atualizarPosicao(v.closest(".corte"));
@@ -373,7 +435,7 @@ function renderFiltros() {
 function cardHTML(c) {
   const forte = !c.manual && c.relativo >= 4;
   return `<section class="corte" data-id="${esc(c.id)}">
-    <video src="${esc(c.url)}" controls preload="metadata" playsinline loop></video>
+    <video data-src="${esc(c.url)}" controls preload="metadata" playsinline loop></video>
     <div class="info">
       <div class="pos" data-pos></div>
       <div class="linha1">
@@ -395,12 +457,43 @@ function cardHTML(c) {
       ${c.top_msgs.length ? `<div class="meta">chat: ${c.top_msgs.slice(0, 3).map(([t, n]) => esc(t.slice(0, 25)) + " ×" + n).join(" · ")}</div>` : ""}
       <div class="meta">${c.duracao ? c.duracao + " s · " : ""}${c.tamanho_mb} MB${c.pronto_em_seg ? " · pronto " + c.pronto_em_seg + " s após o pico" : ""}</div>
       <button class="btn postar" data-postar></button>
+      <div data-capa></div>
       <div class="acoes-edicao" data-acoes-edicao></div>
       <div class="acoes">
         <a class="btn baixar" href="${esc(c.url)}" download>⬇ Baixar</a>
         <button class="btn apagar" data-apagar="${esc(c.id)}">🗑 Apagar</button>
       </div>    </div>
   </section>`;
+}
+
+// ---------------------------------------------------------------- capa do TikTok (só na lista Postar)
+function capaHTML(c) {
+  if (!c.postar) return "";
+  const k = c.capa;
+  if (!k || (!k.pronta && !k.erro))
+    return `<div class="capa-box"><div class="capa-lado"><b>🖼 Gerando a capa para o TikTok…</b>
+      <small>leva uns segundos; aparece aqui sozinha</small></div></div>`;
+  return `<div class="capa-box">
+    ${k.pronta ? `<a href="${esc(k.jpg)}" target="_blank" title="ver a capa inteira"><img src="${esc(k.jpg)}" alt="capa"></a>` : ""}
+    <div class="capa-lado">
+      <b>🖼 Capa do TikTok</b>
+      ${k.erro ? `<div class="capa-erro">⚠ a capa falhou: ${esc(k.erro)}</div>` : ""}
+      <form data-capa-form><input name="texto" value="${esc(k.texto)}" maxlength="80" placeholder="texto da capa"
+        enterkeyhint="done"><button class="btn" type="submit">↻ Refazer</button></form>
+      ${k.manual ? '<button class="link" data-capa-auto>voltar ao texto automático</button>' : ""}
+      ${k.pronta ? `<a class="btn baixar" href="${esc(k.mp4)}" download>⬇ Baixar vídeo com capa</a>` : ""}
+      <small>No TikTok: toque em <i>Capa</i> e arraste até o início do vídeo.</small>
+    </div></div>`;
+}
+
+async function pedirCapa(el, texto) {
+  try {
+    const r = await fetch("/api/capa", {method: "POST", headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({id: el._c.id, texto})});
+    if (!r.ok) throw new Error((await r.json()).erro);
+    aviso("🖼 Refazendo a capa…");
+    setTimeout(carregar, 600);
+  } catch (e) { aviso("Não consegui refazer a capa: " + e.message); }
 }
 
 // ---------------------------------------------------------------- gráfico do chat em volta do corte
@@ -526,14 +619,17 @@ function renderFeed() {
   // a chave inclui a versão do vídeo: se o corte foi refeito/revertido, o player é recriado
   document.querySelectorAll("#feed .corte").forEach(el => existentes[el.dataset.chave] = el);
   const feed = $("#feed");
-  const frag = document.createDocumentFragment();
+  // âncora: o corte que está na tela. Se entrar/sair algo acima dele, a rolagem é compensada.
+  const vAncora = videoAtual(), ancora = vAncora && vAncora.closest(".corte");
+  const topoAntes = ancora ? ancora.getBoundingClientRect().top : null;
+  const ordem = [];
   for (const c of lista) {
     const chave = c.id + "@" + c.versao;
     let el = existentes[chave];
     if (!el) {
       const t = document.createElement("template"); t.innerHTML = cardHTML(c).trim(); el = t.content.firstChild;
       el.dataset.chave = chave;
-      const v = el.querySelector("video"); v.muted = !comSom; observador.observe(v);
+      const v = el.querySelector("video"); v.muted = !comSom; seguir(v);
       v.addEventListener("timeupdate", () => {
         desenharGraficoCorte(el);
         // chegou ao fim (o vídeo fica em loop, então "ended" não dispara) → assistido
@@ -549,12 +645,21 @@ function renderFeed() {
     if (graficoMudou) desenharGraficoCorte(el);
     const acoes = el.querySelector("[data-acoes-edicao]"), novo = acoesEdicaoHTML(c);
     if (acoes.dataset.html !== novo) { acoes.innerHTML = novo; acoes.dataset.html = novo; }
+    // (não redesenha a capa enquanto o texto dela está sendo digitado)
+    const cb = el.querySelector("[data-capa]"), capa = capaHTML(c);
+    if (cb.dataset.html !== capa && !cb.contains(document.activeElement)) { cb.innerHTML = capa; cb.dataset.html = capa; }
     delete existentes[chave];
-    frag.appendChild(el);
+    ordem.push(el);
   }
-  Object.values(existentes).forEach(el => { const v = el.querySelector("video"); observador.unobserve(v); v.pause(); });
-  feed.innerHTML = "";
-  feed.appendChild(frag);
+  Object.values(existentes).forEach(el => { largar(el.querySelector("video")); el.remove(); });
+  // atualiza o feed NO LUGAR: tirar um <video> da página (o antigo innerHTML = "") pausa o vídeo
+  // e perde a rolagem. Só os cards novos (ou fora de ordem) são inseridos.
+  feed.querySelectorAll(":scope > :not(.corte)").forEach(n => n.remove());
+  ordem.forEach((el, i) => { if (feed.children[i] !== el) feed.insertBefore(el, feed.children[i] || null); });
+  if (ancora && ancora.isConnected && topoAntes !== null) {
+    const d = ancora.getBoundingClientRect().top - topoAntes;
+    if (Math.abs(d) > 1) scrollBy({top: d, behavior: "instant"});
+  }
   if (!lista.length) $("#info").textContent = "0 cortes";
   if (!lista.length) feed.innerHTML = `<div class="vazio">${!cortes.length ? "Nenhum corte ainda. Eles aparecem aqui automaticamente."
     : filtro === "novos" ? "🎉 Nenhum corte novo: você já assistiu todos."
@@ -570,6 +675,15 @@ function renderFeed() {
     const ed = ev.target.closest("[data-editar]"), rv = ev.target.closest("[data-reverter]");
     if (ed && !ed.disabled) abrirEditor(ed.dataset.editar);
     if (rv) pedirReversao(rv.dataset.reverter);
+    const ca = ev.target.closest("[data-capa-auto]");
+    if (ca) pedirCapa(ca.closest(".corte"), "");
+  };
+  feed.onsubmit = ev => {
+    const fo = ev.target.closest("[data-capa-form]");
+    if (!fo) return;
+    ev.preventDefault();
+    fo.querySelector("input").blur();
+    pedirCapa(fo.closest(".corte"), fo.texto.value);
   };
   atualizarContagens();
   const v = videoAtual(); if (v) atualizarPosicao(v.closest(".corte"));
@@ -590,11 +704,12 @@ async function carregar(forcar = false) {
     const idsAtuais = new Set(cortes.map(c => c.id));
     const chegaram = nova.filter(c => !idsAtuais.has(c.id) && (filtro === "todos" || c.canal === filtro)).length;
     const sinal = c => [c.id, c.versao, c.editando, !!c.fonte, c.pode_reverter, c.sobra_pronta_em, (c.grafico || []).length,
-                        valorMarcado(c, "assistido"), valorMarcado(c, "postar")].join("|");
+                        valorMarcado(c, "assistido"), valorMarcado(c, "postar"), JSON.stringify(c.capa || null)].join("|");
     const mudou = nova.length !== cortes.length || nova.some((c, i) => !cortes[i] || sinal(cortes[i]) !== sinal(c));
     if (!mudou) return;
-    if (cortes.length && chegaram && scrollY > 80) {
-      // usuário está no meio do feed: não empurra a tela, só avisa
+    const assistindo = videoAtual();
+    if (cortes.length && chegaram && (scrollY > 80 || (assistindo && !assistindo.paused))) {
+      // usuário está no meio do feed (ou assistindo o 1º vídeo): não mexe na tela, só avisa
       pendentes = nova;
       const b = $("#novos"); b.textContent = `▲ ${chegaram} corte${chegaram > 1 ? "s" : ""} novo${chegaram > 1 ? "s" : ""}`; b.style.display = "block";
       return;
@@ -626,7 +741,7 @@ $("#m-confirmar").onclick = async () => {
   // solta o arquivo no navegador antes de apagar (o Windows bloqueia arquivo em uso)
   const el = document.querySelector(`.corte[data-id="${CSS.escape(id)}"]`);
   const v = el && el.querySelector("video");
-  if (v) { observador.unobserve(v); v.pause(); v.removeAttribute("src"); v.load(); }
+  if (v) largar(v);
   try {
     const r = await fetch("/api/apagar", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id})});
     const j = await r.json();
@@ -638,7 +753,7 @@ $("#m-confirmar").onclick = async () => {
   } catch (e) {
     $("#m-erro").textContent = e.message;
     $("#m-confirmar").disabled = false;
-    if (v) { v.src = cortes.find(c => c.id === id).url; observador.observe(v); }
+    if (v) seguir(v);
   }
 };
 
@@ -761,7 +876,7 @@ $("#at-confirmar").onclick = async () => {
   $("#at-confirmar").disabled = true;
   // solta os arquivos no navegador antes de apagar (o Windows bloqueia arquivo em uso)
   document.querySelectorAll("#feed .corte").forEach(el => {
-    if (el._c && el._c.canal === canal) { const v = el.querySelector("video"); observador.unobserve(v); v.pause(); v.removeAttribute("src"); v.load(); }
+    if (el._c && el._c.canal === canal) largar(el.querySelector("video"));
   });
   try {
     const r = await fetch("/api/apagar_canal", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({canal})});
@@ -801,7 +916,55 @@ $("#rv-confirmar").onclick = async () => {
 
 // altura real do cabeçalho fixo (para o encaixe da rolagem)
 const ajustarTopo = () => document.documentElement.style.setProperty("--topo", $("#fixo").offsetHeight + "px");
+
+// ---------------------------------------------------------------- alerta de disco cheio (igual ao do painel)
+function htmlAlertaDisco(d) {
+  if (!d || (!d.baixo && !(d.pausados || []).length)) return "";
+  const lista = (d.pausados || []).join(", ") || "nenhum canal rodando";
+  return d.baixo
+    ? `<span>⛔ <b>Disco quase cheio: ${d.livre_gb} GB livres</b> (mínimo ${d.limite_gb} GB). Monitoramento PAUSADO (${esc(lista)}).
+       Apague cortes para liberar espaço; depois aparece o botão Retomar.</span>`
+    : `<span>✅ <b>Espaço liberado: ${d.livre_gb} GB livres.</b> Canais pausados: ${esc(lista)}.</span>
+       <button data-retomar-disco>▶ Retomar monitoramento</button>`;
+}
+async function retomarDisco(btn) {
+  btn.disabled = true;
+  try {
+    const j = await (await fetch("/api/disco/retomar", {method: "POST"})).json();
+    if (j.erro) alert(j.erro);
+  } catch (e) { alert(e.message); }
+  btn.disabled = false;
+}
+let ultimoAlertaDisco = null;
+async function checarDisco() {
+  try {
+    const e = await (await fetch("/api/estado", {cache: "no-store"})).json();
+    const h = htmlAlertaDisco(e.disco);
+    if (h === ultimoAlertaDisco) return;
+    ultimoAlertaDisco = h;
+    const el = $("#alerta-disco");
+    el.innerHTML = h; el.hidden = !h; el.classList.toggle("liberado", !!e.disco && !e.disco.baixo);
+    const b = el.querySelector("[data-retomar-disco]"); if (b) b.onclick = () => retomarDisco(b);
+    document.title = e.disco && e.disco.baixo ? "⛔ DISCO CHEIO · Vídeos" : "Vídeos";
+    ajustarTopo();
+  } catch (e) { /* sem conexão: o aviso de conexão já aparece no topo */ }
+}
+checarDisco();
+setInterval(checarDisco, 10000);
 addEventListener("resize", ajustarTopo);
+
+// ---------------------------------------------------------------- ocultar / mostrar o menu (lembrado neste aparelho)
+function menuOculto(oculto, lembrar = true) {
+  // mantém na tela o vídeo que está sendo visto (o topo muda de altura)
+  const v = videoAtual(), card = v && v.closest(".corte"), antes = card ? card.getBoundingClientRect().top : null;
+  document.body.classList.toggle("sem-menu", oculto);
+  ajustarTopo();
+  if (card) { const d = card.getBoundingClientRect().top - antes; if (Math.abs(d) > 1) scrollBy({top: d, behavior: "instant"}); }
+  if (lembrar) try { localStorage.setItem("menuOculto", oculto ? "1" : ""); } catch (e) { /* sem armazenamento */ }
+}
+$("#ocultar-menu").onclick = () => menuOculto(true);
+$("#mostrar-menu").onclick = () => menuOculto(false);
+try { if (localStorage.getItem("menuOculto")) menuOculto(true, false); } catch (e) { /* sem armazenamento */ }
 ajustarTopo();
 aplicarSom();
 carregar().then(ajustarTopo);

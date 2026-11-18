@@ -18,15 +18,20 @@ _encoder_cache: str | None = None
 
 def escolher_encoder(pref: str = "auto") -> str:
     global _encoder_cache
-    if pref in ("qsv", "x264"):
+    if pref in ("qsv", "amf", "x264"):
         return pref
     if _encoder_cache:
         return _encoder_cache
-    teste = subprocess.run(
-        [FFMPEG, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=1080x1920:rate=30",
-         "-t", "0.5", "-vf", "format=nv12", "-c:v", "h264_qsv", "-f", "null", "-"],
-        capture_output=True, creationflags=CREATE_NO_WINDOW)
-    _encoder_cache = "qsv" if teste.returncode == 0 else "x264"
+    # QuickSync (Intel) ou AMF (AMD Radeon); se nenhum funcionar, libx264 na CPU
+    _encoder_cache = "x264"
+    for nome in ("qsv", "amf"):
+        teste = subprocess.run(
+            [FFMPEG, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=1080x1920:rate=30",
+             "-t", "0.5", "-vf", "format=nv12", "-c:v", f"h264_{nome}", "-f", "null", "-"],
+            capture_output=True, creationflags=CREATE_NO_WINDOW)
+        if teste.returncode == 0:
+            _encoder_cache = nome
+            break
     log.info("encoder escolhido: %s", _encoder_cache)
     return _encoder_cache
 
@@ -75,6 +80,16 @@ def filtro_layout(canal: dict, src_w: int, src_h: int, cfg_saida: dict, com_lege
     )
 
 
+def codec_video(enc: str, br: str) -> tuple[str, list[str]]:
+    """(formato de pixel, argumentos do ffmpeg) do encoder escolhido."""
+    if enc == "qsv":
+        return "nv12", ["-c:v", "h264_qsv", "-preset", "veryfast", "-b:v", br, "-maxrate", br, "-bufsize", "9M"]
+    if enc == "amf":
+        return "nv12", ["-c:v", "h264_amf", "-quality", "speed", "-rc", "vbr_peak", "-b:v", br, "-maxrate", br,
+                        "-bufsize", "9M"]
+    return "yuv420p", ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-maxrate", br, "-bufsize", "9M"]
+
+
 def renderizar(bruto: Path, inicio: float, duracao: float, canal: dict, cfg_saida: dict,
                pasta_trabalho: Path, saida: Path, com_legenda: bool) -> Path:
     """Roda o ffmpeg com cwd = pasta_trabalho (o filtro ass= não aceita C:\\ no Windows).
@@ -91,13 +106,8 @@ def renderizar(bruto: Path, inicio: float, duracao: float, canal: dict, cfg_said
     if tem_audio:
         grafo += f";[0:a]atrim=start={resto:.3f}:duration={duracao:.3f},asetpts=PTS-STARTPTS[aout]"
     enc = escolher_encoder(cfg_saida.get("encoder", "auto"))
-    br = cfg_saida.get("bitrate", "4500k")
-    if enc == "qsv":
-        grafo = grafo.replace("[out]", ",format=nv12[out]")
-        vcod = ["-c:v", "h264_qsv", "-preset", "veryfast", "-b:v", br, "-maxrate", br, "-bufsize", "9M"]
-    else:
-        grafo = grafo.replace("[out]", ",format=yuv420p[out]")
-        vcod = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-maxrate", br, "-bufsize", "9M"]
+    fmt, vcod = codec_video(enc, cfg_saida.get("bitrate", "4500k"))
+    grafo = grafo.replace("[out]", f",format={fmt}[out]")
     cmd = [FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-nostdin",
            *(["-ss", f"{pre:.3f}"] if pre > 0 else []), "-i", str(bruto),
            "-filter_complex", grafo, "-map", "[out]", *(["-map", "[aout]"] if tem_audio else []),
@@ -107,9 +117,9 @@ def renderizar(bruto: Path, inicio: float, duracao: float, canal: dict, cfg_said
     try:
         rodar(cmd, cwd=pasta_trabalho, timeout=600)
     except RuntimeError:
-        if enc != "qsv":
+        if enc == "x264":
             raise
-        log.warning("QSV falhou, tentando libx264")
+        log.warning("%s falhou, tentando libx264", enc.upper())
         global _encoder_cache
         _encoder_cache = "x264"
         return renderizar(bruto, inicio, duracao, canal, {**cfg_saida, "encoder": "x264"},

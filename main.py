@@ -12,6 +12,8 @@ import signal
 import sys
 import time
 
+from app.capa import Capas
+from app.disco import VigiaDisco
 from app.estado import Estado
 from app.fila import Fila
 from app.gerenciador import Gerenciador
@@ -69,10 +71,18 @@ def main():
         pre_carregar(cfg["legenda"])
 
     ger = Gerenciador(cfg, canais, estado, fila)
+    vigia = VigiaDisco(cfg, ger)
+    vigia.checar()   # disco já cheio ao abrir: os canais nem começam (ficam "pausados")
+    vigia.start()
+    capas = Capas(cfg, fila.lock_arquivos)
+    capas.start()
     iniciar = args.canais if args.canais else [c["nome"] for c in canais if c.get("ativo")]
     for nome in iniciar:
         if nome in ger.por_nome:
-            ger.iniciar(nome)
+            try:
+                ger.iniciar(nome)
+            except RuntimeError as e:
+                log.warning("canal %s não iniciado: %s", nome, e)
         else:
             log.error("canal '%s' não existe em canais.yaml", nome)
     if not ger.rodando:
@@ -80,7 +90,7 @@ def main():
 
     if not args.sem_painel:
         from app.painel import iniciar_painel
-        iniciar_painel(cfg, estado, ger, abrir_navegador=not args.nao_abrir)
+        iniciar_painel(cfg, estado, ger, abrir_navegador=not args.nao_abrir, capas=capas)
 
     def sair(*_):
         log.info("encerrando...")
